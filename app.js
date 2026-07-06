@@ -60,20 +60,27 @@ function weekLabel() {
 
 /* ---------- people ---------- */
 
-function colorFor(email) {
+function colorFor(name) {
   let hash = 0;
-  for (const ch of email) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
+  for (const ch of name.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
   return PERSON_COLORS[hash % PERSON_COLORS.length];
 }
 
-const initialOf = (email) => email[0].toUpperCase();
+const initialOf = (name) => name[0].toUpperCase();
 
 /* ---------- screens ---------- */
 
 function showScreen(name) {
-  for (const id of ["screen-loading", "screen-signin", "screen-denied", "app"]) {
+  for (const id of ["screen-loading", "screen-household", "screen-error", "app"]) {
     document.getElementById(id).classList.toggle("hidden", id !== name);
   }
+}
+
+function showHouseholdScreen() {
+  $("#input-code").value = Store.household;
+  $("#input-name").value = Store.name;
+  $("#code-hint").classList.add("hidden");
+  showScreen("screen-household");
 }
 
 function onState(state) {
@@ -82,24 +89,29 @@ function onState(state) {
     if (state.status === "ready") showScreen("app");
     return;
   }
-  if (state.status === "signedout") showScreen("screen-signin");
-  else if (state.status === "denied") showScreen("screen-denied");
-  else if (state.status === "ready") {
-    renderUser(state.user);
+  if (state.status === "needs-household") showHouseholdScreen();
+  else if (state.status === "error") {
+    $("#error-message").textContent = state.error || "Something went wrong.";
+    showScreen("screen-error");
+  } else if (state.status === "ready") {
+    renderHeader(state);
     showScreen("app");
   } else showScreen("screen-loading");
 }
 
-function renderUser(user) {
+function renderHeader(state) {
   const area = $("#user-area");
   area.innerHTML = "";
-  if (!user) return;
-  const dot = el("span", "person-dot", initialOf(user.email));
-  dot.style.background = colorFor(user.email);
-  dot.title = user.email;
-  const signOut = el("button", "btn small", "Sign out");
-  signOut.onclick = () => Store.signOut();
-  area.append(dot, signOut);
+  if (state.name) {
+    const dot = el("span", "person-dot", initialOf(state.name));
+    dot.style.background = colorFor(state.name);
+    dot.title = state.name;
+    area.appendChild(dot);
+  }
+  const settings = el("button", "btn small", "⚙");
+  settings.title = "Household settings";
+  settings.onclick = showHouseholdScreen;
+  area.appendChild(settings);
 }
 
 /* ---------- rendering ---------- */
@@ -196,8 +208,26 @@ function taskRow(t) {
 $("#btn-prev").onclick = () => { weekStart = addDays(weekStart, -7); renderWeek(); };
 $("#btn-next").onclick = () => { weekStart = addDays(weekStart, 7); renderWeek(); };
 $("#btn-today").onclick = () => { weekStart = startOfWeek(new Date()); renderWeek(); };
-$("#btn-signin").onclick = () => Store.signIn();
-$("#btn-signout-denied").onclick = () => Store.signOut();
+
+$("#household-form").onsubmit = (e) => {
+  e.preventDefault();
+  const code = $("#input-code").value.trim().toLowerCase();
+  const name = $("#input-name").value.trim();
+  if (!code) {
+    $("#input-code").focus();
+    return;
+  }
+  showScreen("screen-loading");
+  Store.joinHousehold(code, name);
+};
+
+$("#btn-create-code").onclick = () => {
+  $("#input-code").value = Store.generateCode();
+  $("#code-hint").classList.remove("hidden");
+};
+
+$("#btn-retry").onclick = () => location.reload();
+$("#btn-error-settings").onclick = showHouseholdScreen;
 
 renderWeek();
 Store.init({

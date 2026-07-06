@@ -1,20 +1,18 @@
 rules_version = '2';
 
-// Firestore security rules — this is what actually protects your data.
+// Firestore security rules.
 //
-// Paste this into Firebase console -> Firestore Database -> Rules, replacing
-// the two placeholder emails with the Google accounts you and your wife use.
-// Keep the real emails in the console only (not in this file) if your GitHub
-// repo is public and you'd rather not publish them.
+// Paste this into Firebase console -> Firestore Database -> Rules.
+//
+// Only documents under households/<code>/tasks are reachable, and only by
+// someone who knows the household code, because the code is part of the
+// path. The code is a long random string that never appears in this repo —
+// treat it like a house key and only share it with each other.
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null
-        && request.auth.token.email in [
-          'YOUR-EMAIL@gmail.com',
-          'YOUR-WIFES-EMAIL@gmail.com'
-        ];
+    match /households/{household}/tasks/{task} {
+      allow read, write: if true;
     }
   }
 }

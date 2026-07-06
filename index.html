@@ -15,22 +15,34 @@
     <div class="spinner" aria-label="Loading"></div>
   </div>
 
-  <div id="screen-signin" class="screen hidden">
+  <div id="screen-household" class="screen hidden">
     <div class="gate-card">
       <div class="gate-emoji">🗓️</div>
       <h1>Our Week</h1>
-      <p>A weekly planner for two.</p>
-      <button id="btn-signin" class="btn primary">Sign in with Google</button>
+      <p>One planner, shared by everyone who has the household code.</p>
+      <form id="household-form">
+        <label class="field">Household code
+          <input id="input-code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. k7pm-3xqf-9wt2">
+        </label>
+        <label class="field">Your name <span class="opt">(shows who added a task)</span>
+          <input id="input-name" type="text" maxlength="20" placeholder="e.g. Sam">
+        </label>
+        <p id="code-hint" class="hint hidden">Code created ✓ &nbsp;Share it with the other person — entering the same code on their phone opens the same planner.</p>
+        <button type="submit" class="btn primary">Open our planner</button>
+      </form>
+      <p class="alt">First time here? <button id="btn-create-code" type="button" class="btn link">Create a new household code</button></p>
     </div>
   </div>
 
-  <div id="screen-denied" class="screen hidden">
+  <div id="screen-error" class="screen hidden">
     <div class="gate-card">
-      <div class="gate-emoji">🔒</div>
-      <h1>No access</h1>
-      <p>This Google account isn't on the allowed list.<br>
-         The allowed emails live in your Firestore security rules.</p>
-      <button id="btn-signout-denied" class="btn">Sign out</button>
+      <div class="gate-emoji">⚠️</div>
+      <h1>Hmm, that didn't work</h1>
+      <p id="error-message"></p>
+      <div class="gate-actions">
+        <button id="btn-retry" class="btn primary">Try again</button>
+        <button id="btn-error-settings" class="btn">Change household code</button>
+      </div>
     </div>
   </div>
 
