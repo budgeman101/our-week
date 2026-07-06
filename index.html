@@ -1,77 +1,427 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Our Week</title>
-  <meta name="theme-color" content="#0f766e">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗓️</text></svg>">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Our Week — Plan</title>
+<meta name="theme-color" content="#4f46e5" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Our Week" />
+
+<!-- Firebase (optional live sync). Harmless if you never add keys. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --indigo:#4f46e5; --indigo-d:#4338ca; --indigo-soft:#eef2ff;
+    --bg:#f3f4f6; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --faint:#9ca3af;
+    --line:#e5e7eb; --line-soft:#f1f3f6;
+    --ben:#2563eb; --ben-bg:#dbeafe;
+    --lindsay:#db2777; --lindsay-bg:#fce7f3;
+    --both:#b45309; --both-bg:#fef3c7;
+    --clean:#0f766e; --clean-bg:#ccfbf1;
+    --green:#10b981; --today:#eef2ff;
+    --shadow:0 1px 2px rgba(17,24,39,.04), 0 6px 18px rgba(17,24,39,.05);
+    --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .wrap{max-width:620px; margin:0 auto; padding:0 14px 60px}
+  svg{flex:none}
+
+  header{
+    position:sticky; top:0; z-index:20;
+    background:var(--indigo); color:#fff;
+    margin:0 -14px; padding:14px 16px 12px;
+    padding-top:calc(14px + env(safe-area-inset-top));
+    display:flex; align-items:center; gap:10px;
+  }
+  header h1{font-size:18px; margin:0; font-weight:700; letter-spacing:.2px; flex:1; display:flex; align-items:center; gap:8px}
+  .pill{font-size:11px; font-weight:600; padding:4px 9px; border-radius:999px; background:rgba(255,255,255,.18); white-space:nowrap}
+  .pill.synced{background:var(--green)}
+  .iconbtn{background:rgba(255,255,255,.15); border:0; color:#fff; width:34px; height:34px; border-radius:10px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center}
+  .iconbtn:active{transform:scale(.94)}
+
+  /* tabs */
+  .tabs{display:flex; gap:6px; margin:12px 0 6px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px}
+  .tabs button{flex:1; border:0; background:transparent; color:var(--muted); font-weight:700; font-size:.82rem; padding:8px 6px; border-radius:9px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px}
+  .tabs button svg{width:15px; height:15px}
+  .tabs button.on{background:var(--indigo); color:#fff}
+  .badge{background:var(--lindsay); color:#fff; font-size:.66rem; min-width:17px; height:17px; border-radius:999px; padding:0 5px; display:inline-flex; align-items:center; justify-content:center; font-weight:800}
+  .tabs button.on .badge{background:#fff; color:var(--indigo)}
+
+  .weekbar{display:flex; align-items:center; gap:8px; margin:8px 0 8px}
+  .weekbar .nav{background:var(--card); border:1px solid var(--line); border-radius:10px; width:38px; height:38px; cursor:pointer; color:var(--ink); display:inline-flex; align-items:center; justify-content:center}
+  .weekbar .nav:active{transform:scale(.95)}
+  .weekbar .label{flex:1; text-align:center}
+  .weekbar .label .rng{font-weight:700; font-size:16px}
+  .weekbar .label .sub{font-size:12px; color:var(--muted)}
+  .weekbar .label .sub a{color:var(--indigo); cursor:pointer; text-decoration:none; font-weight:600}
+
+  .days{display:flex; gap:7px; overflow-x:auto; scrollbar-width:none; padding:2px 0 4px; margin:0 -2px}
+  .days::-webkit-scrollbar{display:none}
+  .daypill{flex:0 0 auto; min-width:52px; text-align:center; border:1px solid var(--line); background:var(--card); border-radius:13px; padding:7px 5px 6px; cursor:pointer; transition:transform .07s ease; user-select:none}
+  .daypill:active{transform:scale(.95)}
+  .daypill .dow{font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); font-weight:700}
+  .daypill .dnum{font-size:1.16rem; font-weight:700; line-height:1.15}
+  .daypill .dot{width:5px; height:5px; border-radius:50%; background:var(--indigo); margin:3px auto 0}
+  .daypill:not(.today) .dot{visibility:hidden}
+  .daypill.today:not(.sel){border-color:var(--indigo)}
+  .daypill.sel{background:var(--indigo); border-color:var(--indigo); box-shadow:var(--shadow)}
+  .daypill.sel .dow,.daypill.sel .dnum{color:#fff}
+  .daypill.sel .dot{background:rgba(255,255,255,.85)}
+
+  .dayhead{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin:14px 2px 2px}
+  .dayhead .dtitle{font-size:1.12rem; font-weight:700}
+  .dayhead .dtitle .todaytag{font-size:.66rem; font-weight:700; color:#fff; background:var(--indigo); border-radius:999px; padding:2px 8px; margin-left:7px; vertical-align:middle; letter-spacing:.03em}
+  .dayhead .prog{font-size:.78rem; color:var(--faint); white-space:nowrap}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:13px 14px; margin:10px 0}
+  .card.lindsay{background:linear-gradient(180deg,#fdf2f8,#ffffff)}
+  .ctitle{display:flex; align-items:center; gap:8px; font-size:.72rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--indigo); margin:0 0 10px}
+  .ctitle svg{width:17px; height:17px}
+  .ctitle.pink{color:var(--lindsay)}
+  .ctitle.clean{color:var(--clean)}
+
+  .headline{font-size:1rem; line-height:1.45; margin:0 0 12px}
+  .headline.tap{cursor:pointer; border-radius:8px}
+  .headline.tap:active{opacity:.65}
+  .metarow{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:11px}
+  .meta{flex:1 1 calc(50% - 4px); min-width:120px; background:#fdf2f8; border:1px solid #fbe3ef; border-radius:11px; padding:8px 10px}
+  .meta.tap{cursor:pointer}
+  .meta.tap:active{opacity:.65}
+  .meta .lbl{font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; color:var(--lindsay); font-weight:700}
+  .meta .val{font-size:.88rem; margin-top:2px}
+  .carechips{display:flex; flex-wrap:wrap; gap:7px}
+  .carechip{display:inline-flex; align-items:center; gap:6px; font-size:.8rem; background:#fff; border:1px solid var(--line); border-radius:999px; padding:5px 11px}
+  .carechip svg{width:14px; height:14px; color:var(--lindsay)}
+  .carechip b{font-weight:700}
+  .carechip.tap{cursor:pointer}
+  .carechip.tap:active{transform:scale(.97)}
+  .carechip.add{cursor:pointer; border-style:dashed; color:var(--indigo); font-weight:700}
+  .carechip.add svg{color:var(--indigo)}
+
+  .items{list-style:none; margin:0; padding:0}
+  .item{display:flex; align-items:flex-start; gap:11px; padding:9px 2px; border-top:1px solid var(--line-soft)}
+  .item:first-child{border-top:none}
+  .box{flex:0 0 auto; width:23px; height:23px; border:2px solid #cbd5e1; border-radius:7px; background:#fff; margin-top:1px; cursor:pointer; display:flex; align-items:center; justify-content:center; position:relative}
+  .box:active{transform:scale(.9)}
+  .box svg{width:13px; height:13px; color:#fff; opacity:0; transition:opacity .12s}
+  .item.ben .box{border-color:var(--ben)}
+  .item.lindsay .box{border-color:var(--lindsay)}
+  .item.both .box{border-color:var(--both)}
+  .item.reminder .box{border-color:var(--indigo)}
+  .lab{flex:1; min-width:0}
+  .lab .txt{font-size:.96rem; line-height:1.4; cursor:text; word-break:break-word}
+  .item.both .lab .txt{font-weight:700}
+  .lab .sub{display:block; font-size:.78rem; color:var(--faint); margin-top:1px}
+  .lab .sub .tiny{width:12px; height:12px; vertical-align:-2px; margin-right:2px; color:var(--faint)}
+  .who{flex:0 0 auto; border:0; font-size:.66rem; font-weight:800; letter-spacing:.02em; padding:3px 8px; border-radius:999px; cursor:pointer; white-space:nowrap; margin-top:2px}
+  .who.ben{background:var(--ben-bg); color:var(--ben)}
+  .who.lindsay{background:var(--lindsay-bg); color:var(--lindsay)}
+  .who.both{background:var(--both-bg); color:var(--both)}
+  .editb{flex:0 0 auto; background:transparent; border:0; cursor:pointer; color:#9aa3b2; padding:4px 3px; margin-top:2px; display:inline-flex}
+  .editb:active{color:var(--indigo)}
+  .item.done .box{background:var(--green); border-color:var(--green)}
+  .item.done .box svg{opacity:1}
+  .item.done .lab .txt{color:var(--faint); text-decoration:line-through; text-decoration-color:var(--line); font-weight:400}
+  .item.done .who{opacity:.5}
+  .emptyhint{color:var(--faint); font-size:.9rem; padding:8px 2px}
+
+  .grp{display:flex; align-items:center; gap:7px; font-size:.68rem; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin:13px 0 1px}
+  .grp:first-of-type{margin-top:0}
+  .grp svg{width:15px; height:15px}
+  .grp.morning{color:var(--both)}
+  .grp.night{color:#6d28d9}
+  .grp.each{color:var(--clean)}
+
+  .addmini{margin-left:auto; background:transparent; border:1px dashed var(--line); color:var(--indigo); border-radius:8px; padding:3px 9px; font-size:.7rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:4px; text-transform:none; letter-spacing:0}
+  .addmini:active{transform:scale(.97)}
+  .addmini svg{width:12px; height:12px}
+  .addmini.left{margin-left:0; margin-top:8px}
+
+  .addrow{display:flex; gap:8px; margin-top:12px; padding-top:11px; border-top:1px dashed var(--line)}
+  .addrow input[type=text]{flex:1; border:1px solid var(--line); border-radius:10px; padding:10px 11px; font-size:16px; min-width:0}
+  .addrow .who.cyc{cursor:pointer; align-self:center; margin-top:0}
+  .addrow .add{background:var(--indigo); color:#fff; border:0; border-radius:10px; width:44px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center}
+  .addrow .add:active{background:var(--indigo-d)}
+
+  /* projects */
+  .proj{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:13px 14px; margin:10px 0}
+  .projhd{display:flex; align-items:center; gap:8px}
+  .ptitle{flex:1; font-weight:700; font-size:1.02rem; cursor:pointer; word-break:break-word}
+  .pbar{height:7px; background:var(--line); border-radius:999px; overflow:hidden; margin:10px 0 4px}
+  .pbar span{display:block; height:100%; background:var(--green); border-radius:999px; transition:width .25s}
+  .pmeta{font-size:.72rem; color:var(--faint); margin-bottom:2px}
+  .bigadd{width:100%; margin-top:6px; background:var(--card); border:1px dashed var(--line); color:var(--indigo); border-radius:12px; padding:12px; font-weight:700; font-size:.92rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px}
+  .bigadd:active{transform:scale(.99)}
+  .emptybig{text-align:center; color:var(--faint); padding:34px 12px}
+  .emptybig svg{color:#cbd5e1; margin-bottom:8px}
+  .emptybig p{margin:0; line-height:1.55}
+
+  /* notes */
+  .notecompose{display:flex; gap:8px; margin:12px 0}
+  .notecompose input{flex:1; border:1px solid var(--line); border-radius:10px; padding:11px 12px; font-size:16px; min-width:0}
+  .notecompose button{background:var(--indigo); color:#fff; border:0; border-radius:10px; padding:0 16px; font-weight:700; cursor:pointer}
+  .note{background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:11px 13px; margin:9px 0}
+  .note.mine{background:var(--indigo-soft); border-color:#dfe3fb}
+  .nmeta{display:flex; align-items:center; gap:6px; font-size:.74rem; color:var(--faint)}
+  .nmeta .nby{font-weight:800; color:var(--ink)}
+  .nmeta .ndel{margin-left:auto; background:transparent; border:0; color:#cbd5e1; cursor:pointer; display:inline-flex; padding:2px}
+  .nmeta .ndel:active{color:var(--ink)}
+  .ntext{font-size:.98rem; line-height:1.45; margin:5px 0 7px; white-space:pre-wrap; word-break:break-word}
+  .nstatus{font-size:.76rem}
+  .nstatus .seen{color:var(--green); font-weight:700}
+  .nstatus .unseen{color:var(--faint)}
+  .nstatus .gotit{background:var(--green); color:#fff; border:0; border-radius:999px; padding:5px 12px; font-weight:700; font-size:.76rem; cursor:pointer}
+
+  footer{text-align:center; color:var(--faint); font-size:.74rem; margin-top:22px; line-height:1.6}
+  .legend{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:8px}
+  .legend .lg{display:inline-flex; align-items:center; gap:6px; font-size:.72rem; color:var(--muted); background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 10px}
+  .legend .sw{width:11px; height:11px; border-radius:3px}
+
+  .overlay{position:fixed; inset:0; background:rgba(17,24,39,.55); display:none; align-items:center; justify-content:center; padding:18px; z-index:40}
+  .overlay.show{display:flex}
+  .sheet{background:#fff; border-radius:16px; padding:20px; width:100%; max-width:380px; box-shadow:0 20px 50px rgba(0,0,0,.3); max-height:90vh; overflow:auto}
+  .sheet h2{margin:0 0 6px; font-size:19px; display:flex; align-items:center; gap:8px}
+  .sheet p{margin:0 0 14px; color:var(--muted); font-size:14px}
+  .sheet input[type=text]{width:100%; border:1px solid var(--line); border-radius:10px; padding:12px; font-size:16px}
+  .sheet .btn{width:100%; margin-top:12px; background:var(--indigo); color:#fff; border:0; border-radius:10px; padding:13px; font-size:16px; font-weight:600; cursor:pointer}
+  .sheet .btn.sec{background:#eef0f3; color:var(--ink); margin-top:8px}
+  .sheet .meta{font-size:12px; color:var(--muted); margin-top:14px; line-height:1.5}
+  .sheet .meta code{background:#f1f5f9; padding:1px 5px; border-radius:5px}
+  .statusline{font-size:13px; font-weight:600; margin:2px 0 10px; display:flex; align-items:center; gap:7px}
+  .statusline.synced{color:var(--green)} .statusline.local{color:var(--muted)}
+  .sheet .edwho{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--muted)}
+  .sheet .edwho .who.cyc{cursor:pointer; margin-top:0}
+  .sheet .edicon{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--muted)}
+  .sheet .edicon .iconpick{width:42px; height:36px; border:1px solid var(--line); border-radius:9px; background:#fff; cursor:pointer; display:inline-flex; align-items:center; justify-content:center}
+  .sheet .edicon .iconpick svg{width:18px; height:18px; color:var(--lindsay)}
+  .sheet .eddate{margin-top:12px; font-size:13px; color:var(--muted)}
+  .sheet .eddate label{display:inline-flex; align-items:center; gap:8px}
+  .sheet .eddate input[type=date]{border:1px solid var(--line); border-radius:9px; padding:8px; font-size:15px}
+  .sheet .eddate .lnk{background:transparent; border:0; color:var(--indigo); cursor:pointer; font-size:13px; margin-left:8px; text-decoration:underline}
+  .sheet .eddate .hintsm{font-size:11px; color:var(--faint); margin-top:6px; line-height:1.4}
+  .sheet .edhint{font-size:12px; color:var(--muted); margin:14px 0 4px; display:flex; align-items:center; gap:6px}
+  .sheet .edhint svg{width:14px; height:14px; color:var(--indigo)}
+  .sheet input[type=text]+input[type=text]{margin-top:8px}
+  .idpick{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0 2px}
+  .idpick > span{font-size:13px; color:var(--muted); width:100%}
+  .idpick button{border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:999px; padding:9px 18px; font-weight:700; cursor:pointer}
+  .idpick button.on{background:var(--indigo); border-color:var(--indigo); color:#fff}
+  .idpick.shake{animation:shake .35s}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+  .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:22px; background:#1f2937; color:#fff; padding:11px 14px; border-radius:12px; display:none; align-items:center; gap:14px; z-index:50; box-shadow:0 8px 24px rgba(0,0,0,.3); font-size:14px; max-width:92vw}
+  .toast.show{display:flex}
+  .toast button{background:transparent; border:0; color:#fbbf24; font-weight:700; cursor:pointer; font-size:14px}
+
+  /* appointments + coming-up */
+  .comingup{background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:10px 12px; margin:4px 0 2px}
+  .comingup .cuhd{display:flex; align-items:center; gap:6px; font-size:.7rem; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--both); margin-bottom:4px}
+  .comingup .cuhd svg{width:14px; height:14px}
+  .comingup .curow{font-size:.9rem; line-height:1.55}
+  .comingup .curow b{color:var(--ink)}
+  .comingup .cuwho{font-size:.64rem; font-weight:800; padding:1px 7px; border-radius:999px; margin-left:2px}
+  .cuwho.ben{background:var(--ben-bg); color:var(--ben)} .cuwho.lindsay{background:var(--lindsay-bg); color:var(--lindsay)} .cuwho.both{background:var(--both-bg); color:var(--both)}
+  .appttime{font-weight:700; color:var(--indigo)}
+  .apptrep{font-size:.7rem; color:var(--faint); margin-left:6px}
+  .sheet .edrepeat{margin-top:12px; font-size:14px}
+  .sheet .edrepeat label{display:inline-flex; align-items:center; gap:8px}
+  .sheet .edremind{margin-top:12px; font-size:13px; color:var(--muted)}
+  .sheet .edremind label{display:inline-flex; align-items:center; gap:8px}
+  .sheet .edremind select{border:1px solid var(--line); border-radius:9px; padding:8px; font-size:15px}
+
+  /* printable week */
+  #printSheet{display:none}
+  @media print{
+    @page{ margin:14mm; }
+    .wrap, .overlay, .toast{ display:none !important; }
+    #printSheet{ display:block !important; color:#000; }
+    body{ background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #printSheet h1{ font-size:19pt; margin:0 0 1pt; }
+    #printSheet .prange{ font-size:11pt; margin:0 0 8pt; }
+    #printSheet .pday, #printSheet .proutine{ page-break-inside:avoid; border-top:1.4pt solid #000; padding-top:6pt; margin-top:8pt; }
+    #printSheet .pdayname{ font-size:13pt; font-weight:700; }
+    #printSheet .pmeta{ font-size:9.5pt; margin:2pt 0 0; }
+    #printSheet .pmeta2{ font-size:8.5pt; color:#333; margin:1pt 0 0; }
+    #printSheet .psec{ font-weight:700; font-size:8.5pt; text-transform:uppercase; letter-spacing:.05em; margin:5pt 0 1pt; }
+    #printSheet .pitem{ display:flex; gap:6pt; align-items:flex-start; font-size:10pt; margin:1.5pt 0; }
+    #printSheet .pbox{ width:11pt; height:11pt; border:1pt solid #000; border-radius:2pt; flex:none; margin-top:1.5pt; }
+    #printSheet .pboth{ font-weight:700; }
+    #printSheet .pwho{ color:#555; font-size:8.5pt; margin-left:2pt; }
+    #printSheet .pline{ font-size:10pt; color:#555; margin:1.5pt 0; }
+    #printSheet .pfoot{ font-size:8.5pt; color:#333; margin-top:8pt; font-style:italic; }
+  }
+</style>
 </head>
 <body>
 
-  <div id="screen-loading" class="screen">
-    <div class="spinner" aria-label="Loading"></div>
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19"/></g></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 1 1 9.5 4a6.3 6.3 0 0 0 10.5 10.5z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 6.5C10.5 5 8 4.5 4 4.7v13C8 17.5 10.5 18 12 19.3M12 6.5C13.5 5 16 4.5 20 4.7v13C16 17.5 13.5 18 12 19.3M12 6.5v12.8"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 20s-7-4.6-9.2-9C1.3 8 2.6 4.8 6 4.8c2 0 3.2 1.2 4 2.4.8-1.2 2-2.4 4-2.4 3.4 0 4.7 3.2 3.2 6.2C19 15.4 12 20 12 20z"/></symbol>
+  <symbol id="i-broom" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 4.5L12 12"/><path d="M14 9l-7 7c-1 1-1.5 2-1.5 3.5h7c0-1.5 1-3 2.5-4.5l2-2z"/><path d="M5.5 19.5L4 21"/></g></symbol>
+  <symbol id="i-child" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.4"/><path d="M12 7.4V15M8 10.5h8M12 15l-2.5 5M12 15l2.5 5"/></g></symbol>
+  <symbol id="i-paw" viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="6" cy="10" rx="1.7" ry="2.2"/><ellipse cx="10.5" cy="7" rx="1.8" ry="2.4"/><ellipse cx="15.5" cy="7" rx="1.8" ry="2.4"/><ellipse cx="19" cy="10.5" rx="1.7" ry="2.2"/><path d="M12.5 12c2.4 0 4.4 1.6 4.9 3.8.4 1.7-.9 3.2-2.6 3.2-1 0-1.6-.4-2.3-.4s-1.3.4-2.3.4c-1.7 0-3-1.5-2.6-3.2C8.1 13.6 10.1 12 12.5 12z"/></g></symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 19c0-9 6-14 14-14 0 9-5 14-14 14zM5 19c2-5 5-8 9-9.5"/></symbol>
+  <symbol id="i-tool" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M14.5 6.5a3.5 3.5 0 0 0 4.6 4.6L21 13l-8 8-2-2 1.9-1.9a3.5 3.5 0 0 0-4.6-4.6L3 8l2-2 1.9 1.9"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 4v4h-4"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 20v-4h4"/></g></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></g></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+  <symbol id="i-split" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 6h-6a4 4 0 0 0-4 4v4a4 4 0 0 1-4 4H3M21 18h-6a4 4 0 0 1-4-4M16 3l3 3-3 3M16 15l3 3-3 3"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v11l-5 5H4zM20 15h-5v5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></g></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></g></symbol>
+  <symbol id="i-checklist" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="m9 14 2 2 4-4"/></g></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header>
+    <h1><svg width="22" height="22"><use href="#i-checklist"/></svg><span>Our Week</span></h1>
+    <span class="pill" id="status">This device only</span>
+    <button class="iconbtn" id="printBtn" aria-label="Print week"><svg width="18" height="18"><use href="#i-print"/></svg></button>
+    <button class="iconbtn" id="gear" aria-label="Settings"><svg width="19" height="19"><use href="#i-gear"/></svg></button>
+  </header>
+
+  <div class="tabs" id="tabs">
+    <button data-view="week" class="on"><svg><use href="#i-checklist"/></svg>Week</button>
+    <button data-view="projects"><svg><use href="#i-folder"/></svg>Projects</button>
+    <button data-view="notes"><svg><use href="#i-note"/></svg>Notes <span class="badge" id="notesBadge" style="display:none"></span></button>
   </div>
 
-  <div id="screen-household" class="screen hidden">
-    <div class="gate-card">
-      <div class="gate-emoji">🗓️</div>
-      <h1>Our Week</h1>
-      <p>One planner, shared by everyone who has the household code.</p>
-      <form id="household-form">
-        <label class="field">Household code
-          <input id="input-code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. k7pm-3xqf-9wt2">
-        </label>
-        <label class="field">Your name <span class="opt">(shows who added a task)</span>
-          <input id="input-name" type="text" maxlength="20" placeholder="e.g. Sam">
-        </label>
-        <p id="code-hint" class="hint hidden">Code created ✓ &nbsp;Share it with the other person — entering the same code on their phone opens the same planner.</p>
-        <button type="submit" class="btn primary">Open our planner</button>
-      </form>
-      <p class="alt">First time here? <button id="btn-create-code" type="button" class="btn link">Create a new household code</button></p>
-    </div>
-  </div>
-
-  <div id="screen-error" class="screen hidden">
-    <div class="gate-card">
-      <div class="gate-emoji">⚠️</div>
-      <h1>Hmm, that didn't work</h1>
-      <p id="error-message"></p>
-      <div class="gate-actions">
-        <button id="btn-retry" class="btn primary">Try again</button>
-        <button id="btn-error-settings" class="btn">Change household code</button>
+  <section id="viewWeek">
+    <div class="weekbar">
+      <button class="nav" id="prev" aria-label="Previous week"><svg width="20" height="20"><use href="#i-prev"/></svg></button>
+      <div class="label">
+        <div class="rng" id="weekRange">—</div>
+        <div class="sub" id="weekSub"></div>
       </div>
+      <button class="nav" id="next" aria-label="Next week"><svg width="20" height="20"><use href="#i-next"/></svg></button>
     </div>
-  </div>
+    <div class="days" id="days"></div>
+    <main id="day"></main>
+  </section>
 
-  <div id="app" class="hidden">
-    <header class="topbar">
-      <h1>🗓️ Our Week</h1>
-      <div id="user-area"></div>
-    </header>
+  <section id="viewProjects" style="display:none">
+    <div id="projectsBody"></div>
+  </section>
 
-    <div id="local-banner" class="banner hidden">
-      Local mode — tasks save only in this browser. See the README to turn on syncing.
+  <section id="viewNotes" style="display:none">
+    <div class="notecompose">
+      <input type="text" id="noteText" placeholder="Leave a note for the other…" autocomplete="off" />
+      <button id="notePost">Post</button>
     </div>
+    <div id="notesBody"></div>
+  </section>
 
-    <nav class="weeknav">
-      <button id="btn-prev" class="btn icon" aria-label="Previous week">‹</button>
-      <div class="weeklabel">
-        <span id="week-label"></span>
-        <button id="btn-today" class="btn small hidden">Today</button>
-      </div>
-      <button id="btn-next" class="btn icon" aria-label="Next week">›</button>
-    </nav>
+  <footer>
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--ben)"></span>Ben</span>
+      <span class="lg"><span class="sw" style="background:var(--lindsay)"></span>Lindsay</span>
+      <span class="lg"><span class="sw" style="background:var(--both)"></span>Both (bold)</span>
+    </div>
+    Tap any line to edit · <b>+ Add</b> anywhere · checks save per week and sync to any phone sharing your household code.
+  </footer>
+</div>
 
-    <main>
-      <div id="days" class="grid"></div>
-    </main>
+<!-- Welcome -->
+<div class="overlay" id="welcome">
+  <div class="sheet">
+    <h2>Welcome</h2>
+    <p>Pick a private <b>household code</b> — Ben and Lindsay enter the <b>same</b> code on both phones to share one plan.</p>
+    <input type="text" id="welcomeCode" placeholder="e.g. ben-lindsay-2026-xyz" />
+    <div class="idpick" id="welcomeId">
+      <span>This phone is:</span>
+      <button data-id="ben">Ben</button>
+      <button data-id="lindsay">Lindsay</button>
+    </div>
+    <button class="btn" id="welcomeStart">Start</button>
+    <div class="meta">Until Firebase keys are added (see <code>SETUP-GUIDE.md</code>) this saves on <b>this device only</b> — no account needed.</div>
   </div>
+</div>
 
-  <script src="firebase-config.js"></script>
-  <script src="store.js"></script>
-  <script src="app.js"></script>
+<!-- Settings -->
+<div class="overlay" id="settings">
+  <div class="sheet">
+    <h2><svg width="19" height="19"><use href="#i-gear"/></svg> Settings</h2>
+    <div class="statusline" id="setStatus"></div>
+    <p>This phone is:</p>
+    <div class="idpick" id="setIdRow">
+      <button data-id="ben">Ben</button>
+      <button data-id="lindsay">Lindsay</button>
+    </div>
+    <p style="margin-top:16px">Household code (must match on every phone that shares this plan):</p>
+    <input type="text" id="setCode" />
+    <button class="btn" id="setSave">Save code</button>
+    <button class="btn sec" id="setReseed">Reload this week's starter to-dos</button>
+    <button class="btn sec" id="setClose">Close</button>
+    <div class="meta" id="setMeta"></div>
+  </div>
+</div>
+
+<!-- Item editor -->
+<div class="overlay" id="editor">
+  <div class="sheet">
+    <h2><svg width="19" height="19"><use href="#i-edit"/></svg> <span id="edTitle">Edit</span></h2>
+    <input type="text" id="edText" autocomplete="off" />
+    <div class="edwho" id="edWhoRow">For: <button class="who cyc" id="edWhoBtn">Ben</button> <span>(tap to change)</span></div>
+    <div class="edicon" id="edIconRow" style="display:none">Icon: <button class="iconpick" id="edIconBtn"><svg><use href="#i-paw"/></svg></button> <span>(tap to change)</span></div>
+    <div class="eddate" id="edDateRow" style="display:none">
+      <label><span id="edDateLabel">Date</span> <input type="date" id="edDate" /></label>
+      <button class="lnk" id="edDateClear">clear</button>
+      <div class="hintsm" id="edDateHint">A gentle nudge on that day — never a hard deadline. If it slips, it just drifts to today.</div>
+    </div>
+    <div class="eddate" id="edTimeRow" style="display:none">
+      <label>Time <input type="time" id="edTime" /></label>
+      <button class="lnk" id="edTimeClear">clear</button>
+    </div>
+    <div class="edrepeat" id="edRepeatRow" style="display:none">
+      <label><input type="checkbox" id="edRepeat" /> Repeats weekly</label>
+    </div>
+    <div class="edremind" id="edRemindRow" style="display:none">
+      <label>Remind me
+        <select id="edRemind">
+          <option value="none">don't remind</option>
+          <option value="morning">morning of</option>
+          <option value="dayBefore">the day before</option>
+        </select>
+      </label>
+    </div>
+    <div id="edSecondWrap" style="display:none">
+      <p class="edhint"><svg><use href="#i-split"/></svg> Two items — first above, second here:</p>
+      <input type="text" id="edText2" placeholder="Second item" autocomplete="off" />
+    </div>
+    <button class="btn sec" id="edSplitToggle"><svg width="15" height="15"><use href="#i-split"/></svg> Split into two</button>
+    <button class="btn" id="edSave">Save</button>
+    <button class="btn sec" id="edDelete">Delete</button>
+    <button class="btn sec" id="edCancel">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo">Undo</button></div>
+
+<!-- Printable week (filled in on print, hidden on screen) -->
+<div id="printSheet" aria-hidden="true"></div>
+
+<script src="app.js"></script>
 </body>
 </html>
