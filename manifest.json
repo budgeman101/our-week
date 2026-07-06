@@ -1,0 +1,9 @@
+{
+  "name": "Our Week",
+  "short_name": "Our Week",
+  "description": "A shared weekly planner for two",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f3f5f7",
+  "theme_color": "#0f766e"
+}

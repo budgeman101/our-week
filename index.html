@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Our Week</title>
+  <meta name="theme-color" content="#0f766e">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗓️</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="screen-loading" class="screen">
+    <div class="spinner" aria-label="Loading"></div>
+  </div>
+
+  <div id="screen-signin" class="screen hidden">
+    <div class="gate-card">
+      <div class="gate-emoji">🗓️</div>
+      <h1>Our Week</h1>
+      <p>A weekly planner for two.</p>
+      <button id="btn-signin" class="btn primary">Sign in with Google</button>
+    </div>
+  </div>
+
+  <div id="screen-denied" class="screen hidden">
+    <div class="gate-card">
+      <div class="gate-emoji">🔒</div>
+      <h1>No access</h1>
+      <p>This Google account isn't on the allowed list.<br>
+         The allowed emails live in your Firestore security rules.</p>
+      <button id="btn-signout-denied" class="btn">Sign out</button>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <h1>🗓️ Our Week</h1>
+      <div id="user-area"></div>
+    </header>
+
+    <div id="local-banner" class="banner hidden">
+      Local mode — tasks save only in this browser. See the README to turn on syncing.
+    </div>
+
+    <nav class="weeknav">
+      <button id="btn-prev" class="btn icon" aria-label="Previous week">‹</button>
+      <div class="weeklabel">
+        <span id="week-label"></span>
+        <button id="btn-today" class="btn small hidden">Today</button>
+      </div>
+      <button id="btn-next" class="btn icon" aria-label="Next week">›</button>
+    </nav>
+
+    <main>
+      <div id="days" class="grid"></div>
+    </main>
+  </div>
+
+  <script src="firebase-config.js"></script>
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
