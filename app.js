@@ -343,7 +343,7 @@ function seedShiftsIfNeeded(force){
 function autoRoll(){
   const rk = realWeekKey(); let n=0;
   Object.values(items).forEach(t=>{
-    if(t.kind==="todo" && !t._gone && !t.done && t.weekKey && t.weekKey < rk){
+    if(t.kind==="todo" && !t._gone && !t.done && !t.repeat && t.weekKey && t.weekKey < rk){
       t.weekKey = rk; items[t.id]=t; n++;
       if(colRef) colRef.doc(t.id).set(t).catch(()=>{});
     }
@@ -366,15 +366,18 @@ function migrateRemoveJohny(){
 function infoText(w, field){ const d=items["info:"+w+":"+field]; return d ? d.text : ""; }
 function careItems(w){ return Object.values(items).filter(t=>t.kind==="tpl"&&t.sec==="care"&&t.scope===w&&!t._gone).sort(byOrder); }
 function tplList(sec, scope){ return Object.values(items).filter(t=>t.kind==="tpl"&&t.sec===sec&&t.scope===scope&&!t._gone).sort(byOrder); }
+// per-week done for a recurring to-do; plain done otherwise
+function todoDoneKey(t, wk){ return "tdone:"+t.id+":"+(wk||curWeekKey()); }
+function todoDone(t){ return t.repeat ? !!items[todoDoneKey(t)] : !!t.done; }
 function todosForSel(){
   const wk=curWeekKey();
   return Object.values(items)
-    .filter(t=>t.kind==="todo" && !t._gone && t.weekKey===wk && t.day===selDay)
-    .sort((a,b)=>(a.done-b.done)||((a.order||0)-(b.order||0)));
+    .filter(t=>t.kind==="todo" && !t._gone && (t.repeat ? t.day===selDay : (t.weekKey===wk && t.day===selDay)))
+    .sort((a,b)=>(todoDone(a)-todoDone(b))||((a.order||0)-(b.order||0)));
 }
 function masterTodos(){
   return Object.values(items)
-    .filter(t=>t.kind==="todo" && !t._gone && !t.weekKey)
+    .filter(t=>t.kind==="todo" && !t._gone && !t.weekKey && !t.repeat)
     .sort((a,b)=>(a.done-b.done)||((a.order||0)-(b.order||0)));
 }
 function checkId(tid){ return "k:"+curWeekKey()+":"+selDay+":"+tid; }
@@ -405,7 +408,13 @@ function toggleTpl(id){
   if(items[k]) drop(k);
   else { const t=items[id]; put({id:k, kind:"check", done:true, who:t?t.who:null, by:me||null}); }
 }
-function toggleTodo(id){ const t=items[id]; if(!t) return; t.done=!t.done; t.doneBy=t.done?(me||null):null; put(t); }
+function toggleTodo(id){
+  const t=items[id]; if(!t) return;
+  if(t.repeat){                                    // recurring: check per-week
+    const k=todoDoneKey(t);
+    if(items[k]) drop(k); else put({id:k, kind:"tdone", done:true, by:me||null});
+  } else { t.done=!t.done; t.doneBy=t.done?(me||null):null; put(t); }
+}
 function toggleStep(id){ const t=items[id]; if(!t) return; t.done=!t.done; t.doneBy=t.done?(me||null):null; put(t); }
 function cycleWho(id){ const t=items[id]; if(!t) return; t.who=WHO_ORDER[(WHO_ORDER.indexOf(t.who)+1)%WHO_ORDER.length]; put(t); render(); }
 function addTodo(text){
@@ -514,7 +523,7 @@ function personLoad(who, iso){
   let n=0;
   Object.values(items).forEach(t=>{
     if(t._gone||t.done) return;
-    if(t.kind==="todo"){ if(t.weekKey===wk && t.day===day && m(t.who)) n++; }
+    if(t.kind==="todo"){ if((t.repeat ? t.day===day : (t.weekKey===wk && t.day===day)) && m(t.who)) n++; }
     else if(t.kind==="pstep"){ if(t.schedISO && stepEffectiveISO(t)===iso && m(t.who||(projectOf(t)||{}).who)) n++; }
     else if(t.kind==="appt"){ if(apptOccursOn(t, iso) && m(t.who)) n++; }
   });
@@ -539,6 +548,7 @@ function scheduleItems(list, start){
       if(projOK && fitsDay(who, iso)){
         if(item.kind==="pstep") item.schedISO=iso;
         else { item.weekKey=weekKeyOf(new Date(iso+"T00:00:00")); item.day=weekdayOf(iso); }
+        item.autoPlanned=true;                 // lets "Un-plan" find it again
         put(item); n++; break;
       }
       cursor.setDate(cursor.getDate()+1);
@@ -556,6 +566,19 @@ function planWeek(){
   const steps = Object.values(items).filter(t=>t.kind==="pstep"&&!t._gone&&!t.done&&!t.schedISO).sort(byOrder);
   const todos = masterTodos().filter(t=>!t.done);   // List to-dos with no day yet
   return scheduleItems(steps, startPlanDate()) + scheduleItems(todos, startPlanDate());
+}
+// count / undo auto-scheduled items (not ones you dated by hand)
+function autoPlannedItems(){
+  return Object.values(items).filter(t=>!t._gone && !t.done && t.autoPlanned &&
+    ((t.kind==="pstep"&&t.schedISO) || (t.kind==="todo"&&t.weekKey)));
+}
+function unplanWeek(){
+  let n=0;
+  autoPlannedItems().forEach(t=>{
+    if(t.kind==="pstep") t.schedISO=null; else { t.weekKey=null; t.day=null; }
+    delete t.autoPlanned; put(t); n++;
+  });
+  return n;
 }
 
 /* ============================ appointments ======================== */
@@ -695,7 +718,7 @@ function openEditor(id, fresh){
   show("edDateRow", isStep || isAppt || isTodo || isShift);
   show("edTimeRow", isAppt || isShift);
   show("edEndRow", isShift);
-  show("edRepeatRow", isAppt || isShift);
+  show("edRepeatRow", isAppt || isShift || isTodo);
   show("edRemindRow", isAppt);
   show("edSkipWeek", false);   // shown below only for a repeating shift
   show("edDelete", !isInfo);
@@ -708,8 +731,11 @@ function openEditor(id, fresh){
     document.getElementById("edDate").value = t.schedISO || "";
   }
   if(isTodo){
-    document.getElementById("edDateHint").textContent="Blank = stays on the master List. Day to-dos left unfinished roll forward each week.";
-    document.getElementById("edDate").value = (t.weekKey && t.day!=null) ? isoOfWeekDay(t.weekKey, t.day) : "";
+    document.getElementById("edRepeat").checked = !!t.repeat;
+    document.getElementById("edDateHint").textContent = t.repeat
+      ? "Repeats every week on this weekday. Untick to make it a one-off."
+      : "Blank = stays on the master List. Day to-dos left unfinished roll forward each week.";
+    document.getElementById("edDate").value = (!t.repeat && t.weekKey && t.day!=null) ? isoOfWeekDay(t.weekKey, t.day) : "";
   }
   if(isAppt){
     document.getElementById("edDate").value = t.date || "";
@@ -797,15 +823,22 @@ function saveEditor(){
     if(whoTouched) t.whoManual=true;
     t.who = t.whoManual ? edWho : classifyWho(text1, (projectOf(t)||{}).who||"both");
     const v=document.getElementById("edDate").value; t.schedISO = v || null;
+    delete t.autoPlanned;                          // a manual save is no longer auto-scheduled
   } else if(t.kind==="todo" || (t.kind==="tpl" && t.check) || t.kind==="appt"){
     t.who=edWho;
   }
   if(t.kind==="tpl" && t.sec==="care") t.icon=edIcon;
   if(t.kind==="todo"){
     const v=document.getElementById("edDate").value;
-    if(v){ const d=new Date(v+"T00:00:00"); t.weekKey=weekKeyOf(d); t.day=(d.getDay()+6)%7; }
-    else { t.weekKey=null; t.day=null; }
+    t.repeat = document.getElementById("edRepeat").checked;
+    if(t.repeat){
+      if(v) t.day=(new Date(v+"T00:00:00").getDay()+6)%7;
+      else if(t.day==null) t.day=selDay;   // pin the recurring weekday
+      t.weekKey=null;                        // recurring ignores the week
+    } else if(v){ const d=new Date(v+"T00:00:00"); t.weekKey=weekKeyOf(d); t.day=(d.getDay()+6)%7; }
+    else { t.weekKey=null; t.day=null; }     // back to the master List
     if(!t.area) t.area=classify(t.text).area;
+    delete t.autoPlanned;                     // a manual save is no longer auto-scheduled
   }
   if(t.kind==="appt"){
     t.date = document.getElementById("edDate").value || t.date;
@@ -854,10 +887,12 @@ function tplRow(it){
   </div></li>`;
 }
 function todoRow(t){
-  const sub = t.done && t.doneBy ? `<span class="sub">done by ${WHO[t.doneBy]}</span>` : "";
-  return `<li><div class="item ${t.who} ${t.done?'done':''}" data-id="${t.id}">
+  const done=todoDone(t);
+  const rep = t.repeat ? ` <span class="apptrep">weekly</span>` : "";
+  const sub = done && t.doneBy && !t.repeat ? `<span class="sub">done by ${WHO[t.doneBy]}</span>` : "";
+  return `<li><div class="item ${t.who} ${done?'done':''}" data-id="${t.id}">
     <div class="box" data-act="todocheck"><svg><use href="#i-check"/></svg></div>
-    <div class="lab"><span class="txt" data-act="edititem">${esc(t.text)}</span>${sub}</div>
+    <div class="lab"><span class="txt" data-act="edititem">${esc(t.text)}${rep}</span>${sub}</div>
     <button class="who ${t.who}" data-act="cycwho">${WHO[t.who]}</button>
     <button class="editb" data-act="editbtn" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
@@ -918,7 +953,7 @@ function dayProgress(){
     .concat(tplList("morning","daily").map(x=>x.id), tplList("night","daily").map(x=>x.id), tplList("each","daily").map(x=>x.id));
   let done=0; ids.forEach(id=>{ if(isChecked(id)) done++; });
   const todos=todosForSel(); const sched=scheduledStepsFor(selDayISO());
-  const tdone=todos.filter(t=>t.done).length + sched.filter(s=>s.done).length;
+  const tdone=todos.filter(todoDone).length + sched.filter(s=>s.done).length;
   return { done: done+tdone, total: ids.length+todos.length+sched.length };
 }
 function refreshProgress(){ const pr=dayProgress(); const el=document.querySelector(".dayhead .prog"); if(el) el.textContent=pr.done+"/"+pr.total+" done"; }
@@ -1059,6 +1094,7 @@ function renderList(){
       </div>
       <div class="pmeta" style="margin-top:8px">Sorted by who, then area — tap a tag to fix a guess. Say "on Thursday" to send it straight to a day.</div>
       <button class="bigadd" data-act="planweek" style="margin-top:10px"><svg width="18" height="18"><use href="#i-clock"/></svg> Plan my week</button>
+      ${autoPlannedItems().length ? `<button class="bigadd" data-act="unplanweek" style="margin-top:8px"><svg width="18" height="18"><use href="#i-rotate"/></svg> Un-plan (back to the List)</button>` : ""}
     </div>
     ${secs || empty}`;
   wireList();
@@ -1185,7 +1221,7 @@ function printWeekHTML(){
   let h = `<h1>Our Week</h1><div class="prange">${esc(fmtRange())}</div>`;
   for(let i=0;i<7;i++){
     const d=dateForDay(i), iso=isoOf(d), wk=weekKeyOf(d);
-    const todos=Object.values(items).filter(t=>t.kind==="todo"&&!t._gone&&t.weekKey===wk&&t.day===i).sort(byOrder);
+    const todos=Object.values(items).filter(t=>t.kind==="todo"&&!t._gone&&(t.repeat?t.day===i:(t.weekKey===wk&&t.day===i))).sort(byOrder);
     const sched=Object.values(items).filter(t=>t.kind==="pstep"&&!t._gone&&t.schedISO&&stepEffectiveISO(t)===iso).sort(byOrder);
     const clean=tplList("clean", i);
     const care=careItems(i);
@@ -1258,6 +1294,14 @@ if(HAS_DOM){
       if(!confirm("Spread your "+pending+" unscheduled task"+(pending===1?"":"s")+" across the coming days? (Already-dated items are left alone.)")) return;
       const n=planWeek(); view="week"; render();
       showToast("Planned "+n+" onto your week");
+      return;
+    }
+    if(el.dataset.act==="unplanweek"){
+      const cnt=autoPlannedItems().length;
+      if(!cnt){ showToast("Nothing to un-plan"); return; }
+      if(!confirm("Move the "+cnt+" auto-scheduled item"+(cnt===1?"":"s")+" back to the List / undated? (Anything you dated yourself stays put.)")) return;
+      const n=unplanWeek(); render();
+      showToast("Moved "+n+" back");
       return;
     }
     const row=el.closest("[data-id]"); if(!row) return;
@@ -1578,6 +1622,25 @@ if(!HAS_DOM){
     const iso=placed[0].schedISO;
     console.log("personLoad counts placed steps:", personLoad("ben", iso)>=1);
     ["proj:cap"].concat(placed.map(s=>s.id)).forEach(id=>delete items[id]);
+  })();
+
+  /* recurring to-dos + un-plan */
+  (function(){
+    items["c:rep"]={id:"c:rep",kind:"todo",text:"Water plants",who:"lindsay",repeat:true,day:0,weekKey:null,done:false,order:1};
+    selDay=0; currentMonday=mondayOf(new Date("2026-08-03T00:00:00"));
+    console.log("recurring shows on its weekday every week:", todosForSel().some(t=>t.id==="c:rep"));
+    console.log("recurring stays off the master List:", !masterTodos().some(t=>t.id==="c:rep"));
+    toggleTodo("c:rep");
+    console.log("recurring checks per-week:", todoDone(items["c:rep"])===true);
+    currentMonday=mondayOf(new Date("2026-08-10T00:00:00"));
+    console.log("next week starts unchecked:", todoDone(items["c:rep"])===false);
+    delete items["c:rep"]; delete items["tdone:c:rep:2026-08-03"];
+    // un-plan reverses only auto-scheduled items
+    items["c:mine"]={id:"c:mine",kind:"todo",text:"by hand",who:"ben",weekKey:"2026-08-03",day:2,done:false,order:1};
+    items["c:auto"]={id:"c:auto",kind:"todo",text:"auto",who:"ben",weekKey:"2026-08-03",day:2,done:false,autoPlanned:true,order:2};
+    const u=unplanWeek();
+    console.log("un-plan moved only the auto one:", u===1 && !items["c:auto"].weekKey && items["c:mine"].weekKey==="2026-08-03");
+    delete items["c:mine"]; delete items["c:auto"];
   })();
   console.log("OK");
 }

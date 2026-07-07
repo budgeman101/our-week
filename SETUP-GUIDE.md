@@ -128,7 +128,7 @@ Add it to the home screen so it opens full-screen with its own icon:
 - **Split into two** — in the editor, tap **Split into two**. It suggests a sensible break point; both halves become separate items on the same day.
 - **Who** — tap the colored **Ben / Lindsay / Both** chip to change who an item is for. Both items show in **bold**.
 - **Check things off** — tap the box. Checkmarks are tracked **per week**, so each week starts fresh while the plan itself stays put.
-- **Recurring vs one-off** — the routine, cleaning, care notes, and Lindsay's info **repeat every week** (cleaning and Lindsay's info are set per weekday); edits to them carry forward. **To-dos** are for that week, and anything you don't finish rolls into the current week automatically.
+- **Recurring vs one-off** — the routine, cleaning, care notes, and Lindsay's info **repeat every week** (cleaning and Lindsay's info are set per weekday); edits to them carry forward. **To-dos** are for that week, and anything you don't finish rolls into the current week automatically. To make a to-do repeat (e.g. "water the plants" every Monday), open it and tick **Repeats weekly** — it then shows every week on that weekday with its own tick each week, and won't roll over.
 - **Undo** — deleting shows a brief **Undo** button in case you tap by mistake.
 - **The Projects tab** — track multi-step jobs (like the stairs), and it mostly runs itself:
   - **Auto who-tags** — a new project (and each step) is auto-labelled **Ben / Lindsay / Both** from its wording, just like the List tab. Tap the coloured chip to change any of them; your change sticks.
