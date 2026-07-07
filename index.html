@@ -124,6 +124,8 @@
   .shiftchip svg{color:var(--lindsay)}
   .shiftchip b{color:var(--ink); font-weight:700}
   .shiftchip .shiftlabel{color:var(--muted)}
+  .shiftchip.skipped{opacity:.5}
+  .shiftchip.skipped b{text-decoration:line-through}
   .shiftchip .apptrep{font-size:.62rem; color:var(--faint); text-transform:uppercase; letter-spacing:.03em}
 
   .items{list-style:none; margin:0; padding:0}
@@ -439,6 +441,7 @@
     </div>
     <button class="btn sec" id="edSplitToggle"><svg width="15" height="15"><use href="#i-split"/></svg> Split into two</button>
     <button class="btn" id="edSave">Save</button>
+    <button class="btn sec" id="edSkipWeek" style="display:none">Skip this week</button>
     <button class="btn sec" id="edDelete">Delete</button>
     <button class="btn sec" id="edCancel">Cancel</button>
   </div>

@@ -244,7 +244,7 @@ function connect(){
   if(unsub){ try{ unsub(); }catch(e){} unsub=null; }
   if(inboxUnsub){ try{ inboxUnsub(); }catch(e){} inboxUnsub=null; }
   colRef=null;
-  loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); autoRoll(); migrateRemoveJohny(); render();
+  loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); autoRoll(); migrateRemoveJohny(); render();
   if(CONFIGURED && household && typeof firebase!=="undefined"){
     try{
       if(!fbStarted){ firebase.initializeApp(firebaseConfig); db=firebase.firestore();
@@ -252,7 +252,7 @@ function connect(){
       colRef = db.collection("households").doc(household).collection("items");
       unsub = colRef.onSnapshot(snap=>{
         const next={}; snap.forEach(doc=> next[doc.id]=doc.data());
-        items=next; seedTodosIfNeeded(); seedTemplateIfNeeded(); autoRoll(); migrateRemoveJohny(); saveLocal(); render(); setStatus(true);
+        items=next; seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); autoRoll(); migrateRemoveJohny(); saveLocal(); render(); setStatus(true);
       }, ()=> setStatus(false));
       drainInbox();
     }catch(e){ setStatus(false); }
@@ -314,6 +314,22 @@ function seedTemplateIfNeeded(force){
     ROUTINE[sec].forEach((r,i)=> seedDoc("tpl:"+sec+":"+r.id,
       {kind:"tpl", sec, scope:"daily", check:true, who:r.who, text:r.text, order:i}, force));
   });
+  setMeta(sentinel); saveLocal();
+}
+// Lindsay's regular weekly nights, seeded once as repeating shifts so a normal
+// week fills itself in (and drives the energy line). Ref dates just fix the
+// weekday: 2026-07-06 Mon, -07 Tue, -10 Fri. Summer changes = edit / skip / add.
+const SHIFT_SEED_VERSION = "v1";
+const REGULAR_SHIFTS = [
+  { id:"shift:reg:mon", date:"2026-07-06", start:"17:30" },
+  { id:"shift:reg:tue", date:"2026-07-07", start:"17:30" },
+  { id:"shift:reg:fri", date:"2026-07-10", start:"16:00" },
+];
+function seedShiftsIfNeeded(force){
+  const sentinel="meta:shiftseed:"+SHIFT_SEED_VERSION;
+  if(!force && items[sentinel]) return;
+  REGULAR_SHIFTS.forEach(s=> seedDoc(s.id,
+    { kind:"shift", label:"", date:s.date, start:s.start, end:"", repeat:true }, force));
   setMeta(sentinel); saveLocal();
 }
 function autoRoll(){
@@ -473,7 +489,21 @@ function apptDone(a, iso){ return a.repeat ? !!items["adone:"+a.id+":"+weekKeyOf
 /* Lindsay's work shifts — dated (or weekly-repeating), each with a start
    time. Kept separate from the weekly template so summer changes are just
    adding/removing shifts, never editing the recurring plan. */
+function shiftSkipKey(s, iso){ return "shiftskip:"+s.id+":"+weekKeyOf(new Date(iso+"T00:00:00")); }
+function shiftSkipped(s, iso){ return !!s.repeat && !!items[shiftSkipKey(s, iso)]; }
+function toggleShiftSkip(id){
+  const s=items[id]; if(!s) return;
+  const k=shiftSkipKey(s, selDayISO());
+  if(items[k]) drop(k); else put({id:k, kind:"shiftskip", done:true});
+}
+// active shifts (excludes ones skipped this week) — drives energy + print
 function shiftsForDate(iso){
+  return Object.values(items).filter(t=>t.kind==="shift"&&!t._gone&&apptOccursOn(t,iso)&&!shiftSkipped(t,iso))
+    .sort((a,b)=>(a.start||"99:99").localeCompare(b.start||"99:99"));
+}
+// everything occurring on the day incl. skipped — the card shows skipped ones
+// muted so they can be tapped to bring back
+function allShiftsOccurring(iso){
   return Object.values(items).filter(t=>t.kind==="shift"&&!t._gone&&apptOccursOn(t,iso))
     .sort((a,b)=>(a.start||"99:99").localeCompare(b.start||"99:99"));
 }
@@ -581,7 +611,9 @@ function openEditor(id, fresh){
   show("edEndRow", isShift);
   show("edRepeatRow", isAppt || isShift);
   show("edRemindRow", isAppt);
+  show("edSkipWeek", false);   // shown below only for a repeating shift
   show("edDelete", !isInfo);
+  document.getElementById("edDelete").textContent = "Delete";
   document.getElementById("edTimeLabel").textContent = isShift ? "Starts" : "Time";
   document.getElementById("edDateLabel").textContent = (isAppt||isShift) ? "Date" : (isTodo ? "Do on" : "Remind me on");
   show("edDateHint", isStep || isTodo);
@@ -604,6 +636,12 @@ function openEditor(id, fresh){
     document.getElementById("edTime").value = t.start || "";
     document.getElementById("edEnd").value = t.end || "";
     document.getElementById("edRepeat").checked = !!t.repeat;
+    if(t.repeat){
+      show("edSkipWeek", true);
+      document.getElementById("edSkipWeek").textContent =
+        shiftSkipped(t, selDayISO()) ? "Bring back this week" : "Skip this week";
+      document.getElementById("edDelete").textContent = "Delete every week";
+    }
   }
   if(hasWho) updateEdWho();
   if(isCare) updateEdIcon();
@@ -742,12 +780,13 @@ function schedStepRow(s){
 function careChip(it){
   return `<span class="carechip tap" data-id="${it.id}" data-act="edititem"><svg><use href="#${it.icon||'i-paw'}"/></svg>${careHTML(it.text)}</span>`;
 }
-function shiftChip(s){
+function shiftChip(s, skipped){
   const time = s.start ? fmtTime(s.start) : "time TBD";
   const span = s.end ? "–"+fmtTime(s.end) : "";
   const label = s.label ? ' <span class="shiftlabel">'+esc(s.label)+'</span>' : "";
-  const rep = s.repeat ? ' <span class="apptrep">weekly</span>' : "";
-  return `<span class="carechip shiftchip tap" data-id="${s.id}" data-act="editshift"><svg><use href="#i-clock"/></svg><b>${esc(time)}${esc(span)}</b>${label}${rep}</span>`;
+  const tag = skipped ? ' <span class="apptrep">skipped</span>'
+                      : (s.repeat ? ' <span class="apptrep">weekly</span>' : "");
+  return `<span class="carechip shiftchip tap ${skipped?'skipped':''}" data-id="${s.id}" data-act="editshift"><svg><use href="#i-clock"/></svg><b>${esc(time)}${esc(span)}</b>${label}${tag}</span>`;
 }
 function energyMetaHTML(w, iso){
   const en=energyInfo(w, iso);
@@ -831,7 +870,7 @@ function renderWeek(){
   const care=careItems(selDay);
   const clean=tplList("clean",selDay);
   const appts=apptsForDate(selDayISO());
-  const shifts=shiftsForDate(selDayISO());
+  const shifts=allShiftsOccurring(selDayISO());
   const emptyHint=`<li class="emptyhint">Nothing here yet — tap + Add.</li>`;
   const todoInner = (todos.length||sched.length)
     ? todos.map(todoRow).join("") + sched.map(schedStepRow).join("")
@@ -855,7 +894,7 @@ function renderWeek(){
       <div class="shiftrow">
         <div class="lbl">Shifts</div>
         <div class="carechips">
-          ${shifts.map(shiftChip).join("")}
+          ${shifts.map(s=>shiftChip(s, shiftSkipped(s, selDayISO()))).join("")}
           <button class="carechip add" data-act="addshift"><svg><use href="#i-plus"/></svg>Add shift</button>
         </div>
       </div>
@@ -1126,6 +1165,10 @@ if(HAS_DOM){
   document.getElementById("edEndClear").onclick=()=>{ document.getElementById("edEnd").value=""; };
   document.getElementById("edSplitToggle").onclick=toggleSplit;
   document.getElementById("edSave").onclick=saveEditor;
+  document.getElementById("edSkipWeek").onclick=()=>{
+    if(editingId) toggleShiftSkip(editingId);
+    editingFresh=false; editingId=null; closeEditorRaw(); render();
+  };
   document.getElementById("edDelete").onclick=deleteFromEditor;
   document.getElementById("edCancel").onclick=closeEditor;
   document.getElementById("edText").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!splitMode) saveEditor(); });
@@ -1201,7 +1244,7 @@ if(HAS_DOM){
     document.getElementById("welcomeCode").value = household || "ben-lindsay-2026-"+Math.random().toString(36).slice(2,6);
     welcomeId = me || "";
     paintIdPick("#welcomeId", welcomeId);
-    loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); migrateRemoveJohny(); render();
+    loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); migrateRemoveJohny(); render();
     overlayWelcome.classList.add("show");
   } else {
     pendWho=me; connect();
@@ -1313,6 +1356,22 @@ if(!HAS_DOM){
     items["shift:e0"]={id:"shift:e0",kind:"shift",date:prev,start:"15:00",end:"23:00",repeat:false};
     console.log("off-a-shift + works → lightest:", /Off a night shift/.test(deriveEnergy(iso)) && /— lightest$/.test(deriveEnergy(iso)));
     delete items["shift:e0"]; delete items["shift:e1"]; delete items["shift:e2"];
+  })();
+
+  /* regular shifts auto-seed as repeating + skip-this-week */
+  seedShiftsIfNeeded();
+  console.log("seeds 3 regular repeating shifts:", Object.values(items).filter(t=>t.kind==="shift"&&t.repeat&&/^shift:reg:/.test(t.id)).length===3);
+  console.log("Mon regular shows 5:30pm:", shiftsForDate("2026-08-03").some(s=>s.id==="shift:reg:mon"&&s.start==="17:30"));
+  console.log("Fri regular shows 4pm:", shiftsForDate("2026-08-07").some(s=>s.id==="shift:reg:fri"&&s.start==="16:00"));
+  (function(){
+    const monISO="2026-08-03";
+    selDay=0; currentMonday=mondayOf(new Date(monISO+"T00:00:00"));
+    toggleShiftSkip("shift:reg:mon");
+    console.log("skip hides it that week (active):", !shiftsForDate(monISO).some(s=>s.id==="shift:reg:mon"));
+    console.log("skip keeps it visible on card (muted):", allShiftsOccurring(monISO).some(s=>s.id==="shift:reg:mon"));
+    console.log("skip doesn't touch next week:", shiftsForDate("2026-08-10").some(s=>s.id==="shift:reg:mon"));
+    toggleShiftSkip("shift:reg:mon");
+    console.log("un-skip restores it:", shiftsForDate(monISO).some(s=>s.id==="shift:reg:mon"));
   })();
   console.log("OK");
 }
