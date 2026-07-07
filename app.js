@@ -807,7 +807,7 @@ function renderList(){
     }).join("");
     return `<div class="card"><div class="ctitle ${w==="lindsay"?"pink":""}"><svg><use href="#i-list"/></svg>${label} · ${open} to do</div>${byArea}</div>`;
   }).join("");
-  const empty=`<div class="emptybig"><svg width="34" height="34"><use href="#i-list"/></svg><p>The master list is empty.<br>Type below, say it to Siri, or import a dump — it sorts itself.</p></div>`;
+  const empty=`<div class="emptybig"><svg width="34" height="34"><use href="#i-list"/></svg><p>The master list is empty.<br>Type above, say it to Siri, or import a dump — it sorts itself.</p></div>`;
   document.getElementById("listBody").innerHTML = `
     <div class="card">
       <div class="addrow" style="margin-top:0;padding-top:0;border-top:0">
