@@ -482,6 +482,41 @@ function addShift(){
   put({ id, kind:"shift", label:"", date:selDayISO(), start:"", end:"", repeat:false });
   openEditor(id, true);
 }
+
+/* Energy auto-derives from the shifts: an evening/overnight shift means a
+   lighter day, working after a night shift is lightest, a plain day shift is
+   moderate. Days with no shift fall back to the editable template line. */
+function toMin(hhmm){ const p=String(hhmm||"").split(":"); return (+p[0]||0)*60+(+p[1]||0); }
+function isNightShift(s){
+  if(!s || !s.start) return false;
+  const st=toMin(s.start);
+  if(st>=14*60) return true;                                  // starts 2 pm or later
+  if(s.end){ const en=toMin(s.end); if(en<=st || en>=22*60) return true; } // crosses midnight / ends late
+  return false;
+}
+function prevISO(iso){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()-1); return isoOf(d); }
+function deriveEnergy(iso){
+  const today=shiftsForDate(iso);
+  const workedLastNight=shiftsForDate(prevISO(iso)).some(isNightShift);
+  if(!today.length && !workedLastNight) return "";            // no shift info → use template
+  const bits=[];
+  if(workedLastNight) bits.push("Off a night shift");
+  today.forEach(s=>{
+    const t=s.start ? " ("+fmtTime(s.start)+(s.end?"–"+fmtTime(s.end):"")+")" : "";
+    bits.push((isNightShift(s)?"works tonight":"day shift")+t);
+  });
+  let sentence=bits.join(" + "); sentence=sentence.charAt(0).toUpperCase()+sentence.slice(1);
+  let level="moderate";
+  if(workedLastNight && today.length) level="lightest";
+  else if(workedLastNight || today.some(isNightShift)) level="light";
+  return sentence+" — "+level;
+}
+function energyInfo(w, iso){
+  const d=deriveEnergy(iso);
+  if(d) return { text:d, derived:true };
+  const info=items["info:"+w+":energy"];
+  return { text: info?info.text:"", derived:false };
+}
 function toggleAppt(id, iso){
   const a=items[id]; if(!a) return;
   if(a.repeat){
@@ -709,6 +744,13 @@ function shiftChip(s){
   const rep = s.repeat ? ' <span class="apptrep">weekly</span>' : "";
   return `<span class="carechip shiftchip tap" data-id="${s.id}" data-act="editshift"><svg><use href="#i-clock"/></svg><b>${esc(time)}${esc(span)}</b>${label}${rep}</span>`;
 }
+function energyMetaHTML(w, iso){
+  const en=energyInfo(w, iso);
+  if(en.derived){
+    return `<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(en.text)}</div></div>`;
+  }
+  return `<div class="meta tap" data-id="info:${w}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(en.text)}</div></div>`;
+}
 function addMini(sec, scope, check){
   return `<button class="addmini" data-act="addtpl" data-sec="${sec}" data-scope="${scope}" data-check="${check?1:0}"><svg><use href="#i-plus"/></svg>Add</button>`;
 }
@@ -813,7 +855,7 @@ function renderWeek(){
         </div>
       </div>
       <div class="metarow">
-        <div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(infoText(selDay,"energy"))}</div></div>
+        ${energyMetaHTML(selDay, selDayISO())}
         <div class="meta tap" data-id="info:${selDay}:furniture" data-act="edititem"><div class="lbl">Furniture</div><div class="val">${esc(infoText(selDay,"furniture"))}</div></div>
       </div>
       <div class="carechips">
@@ -969,7 +1011,7 @@ function printWeekHTML(){
     const shifts=shiftsForDate(iso);
     h += `<div class="pmeta"><b>Lindsay:</b> ${esc(infoText(i,"headline"))}</div>`;
     if(shifts.length) h += `<div class="pmeta2">Shifts: ${shifts.map(s=>(s.start?fmtTime(s.start):"TBD")+(s.end?"–"+fmtTime(s.end):"")+(s.label?" "+s.label:"")).join(" · ")}</div>`;
-    h += `<div class="pmeta2">Energy: ${esc(infoText(i,"energy"))} · Furniture: ${esc(infoText(i,"furniture"))}</div>`;
+    h += `<div class="pmeta2">Energy: ${esc(energyInfo(i, iso).text)} · Furniture: ${esc(infoText(i,"furniture"))}</div>`;
     if(care.length) h += `<div class="pmeta2">${care.map(c=>esc(c.text)).join(" · ")}</div>`;
     if(appts.length){
       h += `<div class="psec">Appointments</div>`;
@@ -1251,6 +1293,22 @@ if(!HAS_DOM){
   console.log("weekly shift repeats next week:", shiftsForDate(isoOf(nextWk)).some(s=>s.id==="shift:2"));
   console.log("shifts sort by start time:", shiftsForDate(todayISO())[0].id==="shift:2");
   console.log("shift prints under Lindsay:", (function(){ selDay=todayMonIndex(); currentMonday=mondayOf(new Date()); return printWeekHTML().includes("Shifts:"); })());
+
+  /* energy auto-derives from shifts */
+  delete items["shift:1"]; delete items["shift:2"];
+  (function(){
+    const iso="2026-08-03", prev="2026-08-02";           // Mon / Sun, no other shifts
+    console.log("energy blank with no shift:", deriveEnergy(iso)==="");
+    items["shift:e1"]={id:"shift:e1",kind:"shift",date:iso,start:"15:00",end:"23:00",repeat:false};
+    console.log("night shift → works tonight/light:", /works tonight/i.test(deriveEnergy(iso)) && /— light$/.test(deriveEnergy(iso)));
+    items["shift:e2"]={id:"shift:e2",kind:"shift",date:iso,start:"07:00",end:"15:00",repeat:false};
+    delete items["shift:e1"];
+    console.log("day shift only → moderate:", /day shift/i.test(deriveEnergy(iso)) && /— moderate$/.test(deriveEnergy(iso)));
+    items["shift:e1"]={id:"shift:e1",kind:"shift",date:iso,start:"15:00",end:"23:00",repeat:false};
+    items["shift:e0"]={id:"shift:e0",kind:"shift",date:prev,start:"15:00",end:"23:00",repeat:false};
+    console.log("off-a-shift + works → lightest:", /Off a night shift/.test(deriveEnergy(iso)) && /— lightest$/.test(deriveEnergy(iso)));
+    delete items["shift:e0"]; delete items["shift:e1"]; delete items["shift:e2"];
+  })();
   console.log("OK");
 }
 function saveLocalSafe(){ try{ saveLocal(); }catch(e){} }
