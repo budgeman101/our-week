@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Our Week — Plan</title>
-<meta name="theme-color" content="#4f46e5" />
+<meta name="theme-color" content="#7c3aed" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -18,22 +18,29 @@
 
 <style>
   :root{
-    --indigo:#4f46e5; --indigo-d:#4338ca; --indigo-soft:#eef2ff;
-    --bg:#f3f4f6; --card:#ffffff; --ink:#1f2937; --muted:#6b7280; --faint:#9ca3af;
-    --line:#e5e7eb; --line-soft:#f1f3f6;
+    --accent:#7c3aed; --accent-d:#6d28d9; --accent-soft:#f3edff;
+    --bg:#f2e9d8; --card:#fffdf8; --ink:#33291c; --muted:#7d7060; --faint:#a2968a;
+    --line:#e6dcc6; --line-soft:#f0e9d9;
     --ben:#2563eb; --ben-bg:#dbeafe;
     --lindsay:#db2777; --lindsay-bg:#fce7f3;
     --both:#b45309; --both-bg:#fef3c7;
     --clean:#0f766e; --clean-bg:#ccfbf1;
-    --green:#10b981; --today:#eef2ff;
-    --shadow:0 1px 2px rgba(17,24,39,.04), 0 6px 18px rgba(17,24,39,.05);
+    --green:#10b981; --today:#f3edff;
+    --shadow:0 1px 2px rgba(90,65,25,.05), 0 6px 18px rgba(90,65,25,.06);
     --radius:16px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
   html,body{margin:0}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    background:var(--bg); color:var(--ink); line-height:1.45;
+    /* parchment: warm base with a soft mottled wash */
+    background:
+      radial-gradient(1100px 500px at 12% -5%, rgba(124,58,237,.045), transparent 60%),
+      radial-gradient(900px 600px at 100% 0, rgba(180,140,60,.07), transparent 55%),
+      radial-gradient(1000px 700px at 50% 115%, rgba(160,120,60,.08), transparent 60%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--ink); line-height:1.45;
     padding-bottom:env(safe-area-inset-bottom);
   }
   .wrap{max-width:620px; margin:0 auto; padding:0 14px 60px}
@@ -41,7 +48,7 @@
 
   header{
     position:sticky; top:0; z-index:20;
-    background:var(--indigo); color:#fff;
+    background:var(--accent); color:#fff;
     margin:0 -14px; padding:14px 16px 12px;
     padding-top:calc(14px + env(safe-area-inset-top));
     display:flex; align-items:center; gap:10px;
@@ -56,9 +63,9 @@
   .tabs{display:flex; gap:6px; margin:12px 0 6px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px}
   .tabs button{flex:1; border:0; background:transparent; color:var(--muted); font-weight:700; font-size:.82rem; padding:8px 6px; border-radius:9px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px}
   .tabs button svg{width:15px; height:15px}
-  .tabs button.on{background:var(--indigo); color:#fff}
+  .tabs button.on{background:var(--accent); color:#fff}
   .badge{background:var(--lindsay); color:#fff; font-size:.66rem; min-width:17px; height:17px; border-radius:999px; padding:0 5px; display:inline-flex; align-items:center; justify-content:center; font-weight:800}
-  .tabs button.on .badge{background:#fff; color:var(--indigo)}
+  .tabs button.on .badge{background:#fff; color:var(--accent)}
 
   .weekbar{display:flex; align-items:center; gap:8px; margin:8px 0 8px}
   .weekbar .nav{background:var(--card); border:1px solid var(--line); border-radius:10px; width:38px; height:38px; cursor:pointer; color:var(--ink); display:inline-flex; align-items:center; justify-content:center}
@@ -66,7 +73,7 @@
   .weekbar .label{flex:1; text-align:center}
   .weekbar .label .rng{font-weight:700; font-size:16px}
   .weekbar .label .sub{font-size:12px; color:var(--muted)}
-  .weekbar .label .sub a{color:var(--indigo); cursor:pointer; text-decoration:none; font-weight:600}
+  .weekbar .label .sub a{color:var(--accent); cursor:pointer; text-decoration:none; font-weight:600}
 
   .days{display:flex; gap:7px; overflow-x:auto; scrollbar-width:none; padding:2px 0 4px; margin:0 -2px}
   .days::-webkit-scrollbar{display:none}
@@ -74,21 +81,21 @@
   .daypill:active{transform:scale(.95)}
   .daypill .dow{font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); font-weight:700}
   .daypill .dnum{font-size:1.16rem; font-weight:700; line-height:1.15}
-  .daypill .dot{width:5px; height:5px; border-radius:50%; background:var(--indigo); margin:3px auto 0}
+  .daypill .dot{width:5px; height:5px; border-radius:50%; background:var(--accent); margin:3px auto 0}
   .daypill:not(.today) .dot{visibility:hidden}
-  .daypill.today:not(.sel){border-color:var(--indigo)}
-  .daypill.sel{background:var(--indigo); border-color:var(--indigo); box-shadow:var(--shadow)}
+  .daypill.today:not(.sel){border-color:var(--accent)}
+  .daypill.sel{background:var(--accent); border-color:var(--accent); box-shadow:var(--shadow)}
   .daypill.sel .dow,.daypill.sel .dnum{color:#fff}
   .daypill.sel .dot{background:rgba(255,255,255,.85)}
 
   .dayhead{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin:14px 2px 2px}
   .dayhead .dtitle{font-size:1.12rem; font-weight:700}
-  .dayhead .dtitle .todaytag{font-size:.66rem; font-weight:700; color:#fff; background:var(--indigo); border-radius:999px; padding:2px 8px; margin-left:7px; vertical-align:middle; letter-spacing:.03em}
+  .dayhead .dtitle .todaytag{font-size:.66rem; font-weight:700; color:#fff; background:var(--accent); border-radius:999px; padding:2px 8px; margin-left:7px; vertical-align:middle; letter-spacing:.03em}
   .dayhead .prog{font-size:.78rem; color:var(--faint); white-space:nowrap}
 
   .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:13px 14px; margin:10px 0}
   .card.lindsay{background:linear-gradient(180deg,#fdf2f8,#ffffff)}
-  .ctitle{display:flex; align-items:center; gap:8px; font-size:.72rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--indigo); margin:0 0 10px}
+  .ctitle{display:flex; align-items:center; gap:8px; font-size:.72rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin:0 0 10px}
   .ctitle svg{width:17px; height:17px}
   .ctitle.pink{color:var(--lindsay)}
   .ctitle.clean{color:var(--clean)}
@@ -108,19 +115,19 @@
   .carechip b{font-weight:700}
   .carechip.tap{cursor:pointer}
   .carechip.tap:active{transform:scale(.97)}
-  .carechip.add{cursor:pointer; border-style:dashed; color:var(--indigo); font-weight:700}
-  .carechip.add svg{color:var(--indigo)}
+  .carechip.add{cursor:pointer; border-style:dashed; color:var(--accent); font-weight:700}
+  .carechip.add svg{color:var(--accent)}
 
   .items{list-style:none; margin:0; padding:0}
   .item{display:flex; align-items:flex-start; gap:11px; padding:9px 2px; border-top:1px solid var(--line-soft)}
   .item:first-child{border-top:none}
-  .box{flex:0 0 auto; width:23px; height:23px; border:2px solid #cbd5e1; border-radius:7px; background:#fff; margin-top:1px; cursor:pointer; display:flex; align-items:center; justify-content:center; position:relative}
+  .box{flex:0 0 auto; width:23px; height:23px; border:2px solid #cfc3ab; border-radius:7px; background:#fff; margin-top:1px; cursor:pointer; display:flex; align-items:center; justify-content:center; position:relative}
   .box:active{transform:scale(.9)}
   .box svg{width:13px; height:13px; color:#fff; opacity:0; transition:opacity .12s}
   .item.ben .box{border-color:var(--ben)}
   .item.lindsay .box{border-color:var(--lindsay)}
   .item.both .box{border-color:var(--both)}
-  .item.reminder .box{border-color:var(--indigo)}
+  .item.reminder .box{border-color:var(--accent)}
   .lab{flex:1; min-width:0}
   .lab .txt{font-size:.96rem; line-height:1.4; cursor:text; word-break:break-word}
   .item.both .lab .txt{font-weight:700}
@@ -131,7 +138,7 @@
   .who.lindsay{background:var(--lindsay-bg); color:var(--lindsay)}
   .who.both{background:var(--both-bg); color:var(--both)}
   .editb{flex:0 0 auto; background:transparent; border:0; cursor:pointer; color:#9aa3b2; padding:4px 3px; margin-top:2px; display:inline-flex}
-  .editb:active{color:var(--indigo)}
+  .editb:active{color:var(--accent)}
   .item.done .box{background:var(--green); border-color:var(--green)}
   .item.done .box svg{opacity:1}
   .item.done .lab .txt{color:var(--faint); text-decoration:line-through; text-decoration-color:var(--line); font-weight:400}
@@ -142,10 +149,10 @@
   .grp:first-of-type{margin-top:0}
   .grp svg{width:15px; height:15px}
   .grp.morning{color:var(--both)}
-  .grp.night{color:#6d28d9}
+  .grp.night{color:#4338ca}
   .grp.each{color:var(--clean)}
 
-  .addmini{margin-left:auto; background:transparent; border:1px dashed var(--line); color:var(--indigo); border-radius:8px; padding:3px 9px; font-size:.7rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:4px; text-transform:none; letter-spacing:0}
+  .addmini{margin-left:auto; background:transparent; border:1px dashed var(--line); color:var(--accent); border-radius:8px; padding:3px 9px; font-size:.7rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:4px; text-transform:none; letter-spacing:0}
   .addmini:active{transform:scale(.97)}
   .addmini svg{width:12px; height:12px}
   .addmini.left{margin-left:0; margin-top:8px}
@@ -153,8 +160,8 @@
   .addrow{display:flex; gap:8px; margin-top:12px; padding-top:11px; border-top:1px dashed var(--line)}
   .addrow input[type=text]{flex:1; border:1px solid var(--line); border-radius:10px; padding:10px 11px; font-size:16px; min-width:0}
   .addrow .who.cyc{cursor:pointer; align-self:center; margin-top:0}
-  .addrow .add{background:var(--indigo); color:#fff; border:0; border-radius:10px; width:44px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center}
-  .addrow .add:active{background:var(--indigo-d)}
+  .addrow .add{background:var(--accent); color:#fff; border:0; border-radius:10px; width:44px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center}
+  .addrow .add:active{background:var(--accent-d)}
 
   /* projects */
   .proj{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:13px 14px; margin:10px 0}
@@ -163,7 +170,7 @@
   .pbar{height:7px; background:var(--line); border-radius:999px; overflow:hidden; margin:10px 0 4px}
   .pbar span{display:block; height:100%; background:var(--green); border-radius:999px; transition:width .25s}
   .pmeta{font-size:.72rem; color:var(--faint); margin-bottom:2px}
-  .bigadd{width:100%; margin-top:6px; background:var(--card); border:1px dashed var(--line); color:var(--indigo); border-radius:12px; padding:12px; font-weight:700; font-size:.92rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px}
+  .bigadd{width:100%; margin-top:6px; background:var(--card); border:1px dashed var(--line); color:var(--accent); border-radius:12px; padding:12px; font-weight:700; font-size:.92rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px}
   .bigadd:active{transform:scale(.99)}
   .emptybig{text-align:center; color:var(--faint); padding:34px 12px}
   .emptybig svg{color:#cbd5e1; margin-bottom:8px}
@@ -172,9 +179,9 @@
   /* notes */
   .notecompose{display:flex; gap:8px; margin:12px 0}
   .notecompose input{flex:1; border:1px solid var(--line); border-radius:10px; padding:11px 12px; font-size:16px; min-width:0}
-  .notecompose button{background:var(--indigo); color:#fff; border:0; border-radius:10px; padding:0 16px; font-weight:700; cursor:pointer}
+  .notecompose button{background:var(--accent); color:#fff; border:0; border-radius:10px; padding:0 16px; font-weight:700; cursor:pointer}
   .note{background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:11px 13px; margin:9px 0}
-  .note.mine{background:var(--indigo-soft); border-color:#dfe3fb}
+  .note.mine{background:var(--accent-soft); border-color:#e2d5fa}
   .nmeta{display:flex; align-items:center; gap:6px; font-size:.74rem; color:var(--faint)}
   .nmeta .nby{font-weight:800; color:var(--ink)}
   .nmeta .ndel{margin-left:auto; background:transparent; border:0; color:#cbd5e1; cursor:pointer; display:inline-flex; padding:2px}
@@ -196,7 +203,7 @@
   .sheet h2{margin:0 0 6px; font-size:19px; display:flex; align-items:center; gap:8px}
   .sheet p{margin:0 0 14px; color:var(--muted); font-size:14px}
   .sheet input[type=text]{width:100%; border:1px solid var(--line); border-radius:10px; padding:12px; font-size:16px}
-  .sheet .btn{width:100%; margin-top:12px; background:var(--indigo); color:#fff; border:0; border-radius:10px; padding:13px; font-size:16px; font-weight:600; cursor:pointer}
+  .sheet .btn{width:100%; margin-top:12px; background:var(--accent); color:#fff; border:0; border-radius:10px; padding:13px; font-size:16px; font-weight:600; cursor:pointer}
   .sheet .btn.sec{background:#eef0f3; color:var(--ink); margin-top:8px}
   .sheet .meta{font-size:12px; color:var(--muted); margin-top:14px; line-height:1.5}
   .sheet .meta code{background:#f1f5f9; padding:1px 5px; border-radius:5px}
@@ -210,15 +217,15 @@
   .sheet .eddate{margin-top:12px; font-size:13px; color:var(--muted)}
   .sheet .eddate label{display:inline-flex; align-items:center; gap:8px}
   .sheet .eddate input[type=date]{border:1px solid var(--line); border-radius:9px; padding:8px; font-size:15px}
-  .sheet .eddate .lnk{background:transparent; border:0; color:var(--indigo); cursor:pointer; font-size:13px; margin-left:8px; text-decoration:underline}
+  .sheet .eddate .lnk{background:transparent; border:0; color:var(--accent); cursor:pointer; font-size:13px; margin-left:8px; text-decoration:underline}
   .sheet .eddate .hintsm{font-size:11px; color:var(--faint); margin-top:6px; line-height:1.4}
   .sheet .edhint{font-size:12px; color:var(--muted); margin:14px 0 4px; display:flex; align-items:center; gap:6px}
-  .sheet .edhint svg{width:14px; height:14px; color:var(--indigo)}
+  .sheet .edhint svg{width:14px; height:14px; color:var(--accent)}
   .sheet input[type=text]+input[type=text]{margin-top:8px}
   .idpick{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0 2px}
   .idpick > span{font-size:13px; color:var(--muted); width:100%}
   .idpick button{border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:999px; padding:9px 18px; font-weight:700; cursor:pointer}
-  .idpick button.on{background:var(--indigo); border-color:var(--indigo); color:#fff}
+  .idpick button.on{background:var(--accent); border-color:var(--accent); color:#fff}
   .idpick.shake{animation:shake .35s}
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 
@@ -234,7 +241,7 @@
   .comingup .curow b{color:var(--ink)}
   .comingup .cuwho{font-size:.64rem; font-weight:800; padding:1px 7px; border-radius:999px; margin-left:2px}
   .cuwho.ben{background:var(--ben-bg); color:var(--ben)} .cuwho.lindsay{background:var(--lindsay-bg); color:var(--lindsay)} .cuwho.both{background:var(--both-bg); color:var(--both)}
-  .appttime{font-weight:700; color:var(--indigo)}
+  .appttime{font-weight:700; color:var(--accent)}
   .apptrep{font-size:.7rem; color:var(--faint); margin-left:6px}
   .sheet .edrepeat{margin-top:12px; font-size:14px}
   .sheet .edrepeat label{display:inline-flex; align-items:center; gap:8px}
@@ -292,6 +299,7 @@
   <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></g></symbol>
   <symbol id="i-checklist" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="m9 14 2 2 4-4"/></g></symbol>
   <symbol id="i-print" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></symbol>
 </svg>
 
 <div class="wrap">
@@ -304,6 +312,7 @@
 
   <div class="tabs" id="tabs">
     <button data-view="week" class="on"><svg><use href="#i-checklist"/></svg>Week</button>
+    <button data-view="list"><svg><use href="#i-list"/></svg>List <span class="badge" id="listBadge" style="display:none"></span></button>
     <button data-view="projects"><svg><use href="#i-folder"/></svg>Projects</button>
     <button data-view="notes"><svg><use href="#i-note"/></svg>Notes <span class="badge" id="notesBadge" style="display:none"></span></button>
   </div>
@@ -319,6 +328,10 @@
     </div>
     <div class="days" id="days"></div>
     <main id="day"></main>
+  </section>
+
+  <section id="viewList" style="display:none">
+    <div id="listBody"></div>
   </section>
 
   <section id="viewProjects" style="display:none">
@@ -373,6 +386,8 @@
     <input type="text" id="setCode" />
     <button class="btn" id="setSave">Save code</button>
     <button class="btn sec" id="setReseed">Reload this week's starter to-dos</button>
+    <button class="btn sec" id="setImport">Import tasks (JSON file)</button>
+    <input type="file" id="importFile" accept=".json,application/json" style="display:none" />
     <button class="btn sec" id="setClose">Close</button>
     <div class="meta" id="setMeta"></div>
   </div>

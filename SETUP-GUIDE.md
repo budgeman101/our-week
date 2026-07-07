@@ -87,12 +87,14 @@ By default test mode lets anyone in for 30 days. Set a simple permanent rule ins
 
 ### Part F — Put it online so both phones can open it
 
-1. Go to **https://app.netlify.com/drop**
-2. Drag the **whole `todo-app` folder** onto that page.
-3. It gives you a link like `https://something-random.netlify.app`. That's your app. (Make a free Netlify account when prompted so the link stays up permanently.)
+Now that the app lives in a GitHub repository, **GitHub Pages** is the tidy way (free, and it updates automatically every time the repo is pushed):
+
+1. On github.com, open the repo → **Settings** → **Pages**.
+2. Under *Build and deployment*, set **Source** to "Deploy from a branch", pick the `main` branch and `/ (root)` folder, and save.
+3. After a minute the app is live at `https://YOUR-USERNAME.github.io/REPO-NAME/`.
 4. Open that link on **both phones**.
 
-*(Prefer Firebase Hosting, GitHub Pages, or another host? Any static host works — the app is just these files.)*
+*(Netlify Drop — drag the folder onto https://app.netlify.com/drop — still works too. Any static host does; the app is just these files.)*
 
 ### Part G — Connect both phones
 
@@ -114,6 +116,7 @@ Add it to the home screen so it opens full-screen with its own icon:
 ## How to use it
 
 - **Pick a day** — tap a day along the top. Today is highlighted. Use the **arrows** to move between weeks; *Jump to this week* brings you back.
+- **The List tab** — the master household to-do list, sorted **by who, then by area** just like the paper one, automatically. Dump tasks in by typing (no sorting needed — it guesses who/area, tap a tag to fix), by voice (**SIRI-SETUP.md**), or as a whole pile at once (**DUMP-IMPORT.md**). Saying "on Thursday" sends a task straight to that day. To schedule a List item, open it and set **Do on**; clear the date to send it back to the List.
 - **Edit anything** — tap any line (or its **pencil**) to open the editor. You can reword it, change who it's for, **split it into two**, or delete it. This works for your to-dos, the cleaning step, the morning/night/each-day routine, the Sam/Johny/Lou Lou notes, and even Lindsay's schedule, energy, and furniture lines.
 - **Add your own** — tap **+ Add** in any section: a care note on Lindsay's card, a cleaning step, a morning/night/each-day routine item, or a to-do (type it in the box, pick who, tap the plus).
 - **Split into two** — in the editor, tap **Split into two**. It suggests a sensible break point; both halves become separate items on the same day.
@@ -145,3 +148,5 @@ Add it to the home screen so it opens full-screen with its own icon:
 | `service-worker.js` | Makes it work offline once hosted. |
 | `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App icons. |
 | `SETUP-GUIDE.md` | This file. |
+| `SIRI-SETUP.md` | "Hey Siri, add to Our Week" — voice dumps into the List. |
+| `DUMP-IMPORT.md` | Bulk dumps: agent-sorted notebook/notes piles, imported or pushed in. |

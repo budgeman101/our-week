@@ -32,6 +32,68 @@ const DAY_FULL  = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"
 const DAY_SHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const CARE_ICONS = ["i-paw","i-child","i-leaf","i-heart","i-list"];
 
+/* ================= master List: areas + auto-sorting =============== *
+ *  Tasks dumped in (typed, Siri inbox, or imported) sort themselves
+ *  by who and area — same shape as the paper "Household To-Do List".
+ *  Guesses are always fixable with a tap; nothing is ever mis-lost.
+ * ------------------------------------------------------------------ */
+const AREAS = {
+  shop:"Shop & Furniture", house:"Around the House", cleaning:"Cleaning & Tidying",
+  kitchen:"Kitchen", laundry:"Laundry & Clothes", yard:"Yard & Outdoor",
+  garage:"Garage & Organizing", paint:"Painting & Home", selling:"Selling & Listing",
+  organizing:"Organizing", plants:"Plants", pets:"Pets",
+  errands:"Errands & Admin", personal:"Personal", other:"Other",
+};
+const AREA_ORDER = Object.keys(AREAS);
+/* first matching rule wins — specific areas before broad ones */
+const AREA_RULES = [
+  ["personal", /\b(nails?|toenails?|cuticles?|rosary|bio.?oil|ulike|hair.?removal|haircut)\b/],
+  ["selling",  /\b(sell|listing|price|marketplace|kijiji)\b|^list\b/],
+  ["pets",     /\b(pets?|dogs?|cats?|johny|lou ?lou|vet|leash|litter)\b/],
+  ["plants",   /\bplants?\b/],
+  ["shop",     /\b(shop|dresser|workbench)\b/],
+  ["laundry",  /\b(laundry|fold(ing)?|iron(ing)?|clothes)\b/],
+  ["yard",     /\b(weed\w*|lawn|rake|garden|prun\w+|raspberr\w+|patio|hose|mow\w*|de.?pest|diatomaceous|hedge|fence|bbq|barbecue)\b/],
+  ["garage",   /\b(garage|ladder|chargers?|cords?)\b/],
+  ["kitchen",  /\b(dishwasher|pantry|slow.?cooker|dehydrator|green bin|fridge|freezer|meal.?plan\w*|kitchen|dishes)\b/],
+  ["paint",    /\b(paint\w*|prime|frame)\b/],
+  ["errands",  /\b(grocer\w*|depot|dollarama|recycl\w*|tires?|temu|order\w*|returns?|pick.?up|ipad|bank|mail|post office|truck)\b/],
+  ["organizing",/\b(organi[sz]\w+|bookshel(f|ves)|books)\b/],
+  ["house",    /\b(shel(f|ves)|move the|curtains?|picture)\b/],
+  ["cleaning", /\b(clean\w*|wash\w*|wipe|dust\w*|vacuum|mop|scrub|tidy\w*|declutter|sheets?|rugs?|shower|bathroom|sweep|bins?)\b/],
+];
+const WHO_RULES = [
+  ["both",    /\b(to the shop|shel(f|ves)|both|together|family)\b|\bwe\b/],
+  ["lindsay", /\b(laundry|fold(ing)?|sell|listing|price|plants?|nails?|cuticles?|rosary|bio.?oil|ulike|pantry|meal.?plan\w*|temu|walls|rugs?|stroller|wagon|swing|toy room|bookshel(f|ves)|maiya|lindsay)\b/],
+  ["ben",     /\b(weed\w*|lawn|rake|garden|prun\w+|patio|bbq|barbecue|hose|garage|ladder|chargers?|cords?|paint\w*|prime|frame|grocer\w*|depot|dollarama|recycl\w*|tires?|truck|ipad|dishwasher|bed.?sheets|under the bed|ottoman|tv|ledges|ben)\b/],
+];
+/* fallback when no who-keyword hits: the usual split per area */
+const AREA_WHO_DEFAULT = { shop:"both", house:"both", cleaning:"lindsay", kitchen:"lindsay",
+  laundry:"lindsay", yard:"ben", garage:"ben", paint:"ben", selling:"lindsay", organizing:"lindsay",
+  plants:"lindsay", pets:"ben", errands:"ben", personal:"lindsay", other:"both" };
+
+function classify(text){
+  const s=String(text).toLowerCase();
+  let area="other";
+  for(const r of AREA_RULES){ if(r[1].test(s)){ area=r[0]; break; } }
+  let who=null;
+  for(const r of WHO_RULES){ if(r[1].test(s)){ who=r[0]; break; } }
+  return { area, who: who || AREA_WHO_DEFAULT[area] || "both" };
+}
+
+/* "…on thursday" / "…tomorrow" schedules straight onto that day */
+const DAY_WORDS = { monday:0, tuesday:1, wednesday:2, thursday:3, friday:4, saturday:5, sunday:6 };
+function extractDay(text){
+  const re=/\s*\b(?:on|for)\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\s*\b(today|tomorrow)\b\s*$/i;
+  const m=String(text).match(re);
+  if(!m) return { text:String(text), iso:null };
+  const word=(m[1]||m[2]).toLowerCase();
+  const d=new Date();
+  if(word==="tomorrow") d.setDate(d.getDate()+1);
+  else if(word!=="today") d.setDate(d.getDate() + ((DAY_WORDS[word]-((d.getDay()+6)%7)+7)%7));
+  return { text:String(text).replace(m[0]," ").replace(/\s{2,}/g," ").trim(), iso:isoOf(d) };
+}
+
 /* =================== seed source (defaults only) ================== */
 const DAYPLAN = {
   0:{ headline:"Lindsay works tonight → solo evening, Ben walks Lou Lou.",
@@ -115,7 +177,7 @@ let currentMonday = mondayOf(new Date());
 let selDay = todayMonIndex();
 let pendWho = "ben";
 let welcomeId = "";
-let db = null, colRef = null, unsub = null, fbStarted = false;
+let db = null, colRef = null, unsub = null, inboxUnsub = null, fbStarted = false;
 let undoTimer = null, lastDeleted = null;
 let editingId = null, edWho = "ben", edIcon = "i-paw", splitMode = false, editingFresh = false;
 
@@ -156,6 +218,7 @@ function relTime(ts){
   return new Date(ts).toLocaleDateString("en-US",{month:"short", day:"numeric"});
 }
 const byOrder = (a,b)=>(a.order||0)-(b.order||0);
+function isoOfWeekDay(weekKey, day){ const d=new Date(weekKey+"T00:00:00"); d.setDate(d.getDate()+Number(day||0)); return isoOf(d); }
 
 /* ============================== storage =========================== */
 function localKey(){ return "ow-items-"+(household||"default"); }
@@ -179,6 +242,7 @@ function drop(id){
 
 function connect(){
   if(unsub){ try{ unsub(); }catch(e){} unsub=null; }
+  if(inboxUnsub){ try{ inboxUnsub(); }catch(e){} inboxUnsub=null; }
   colRef=null;
   loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); autoRoll(); render();
   if(CONFIGURED && household && typeof firebase!=="undefined"){
@@ -190,8 +254,25 @@ function connect(){
         const next={}; snap.forEach(doc=> next[doc.id]=doc.data());
         items=next; seedTodosIfNeeded(); seedTemplateIfNeeded(); autoRoll(); saveLocal(); render(); setStatus(true);
       }, ()=> setStatus(false));
+      drainInbox();
     }catch(e){ setStatus(false); }
   } else { setStatus(false); }
+}
+
+/* Siri (and remote dumps) drop raw docs into households/<code>/inbox —
+   pull them in, auto-sort them, then clear the inbox. See SIRI-SETUP.md. */
+function drainInbox(){
+  inboxUnsub = db.collection("households").doc(household).collection("inbox")
+    .onSnapshot(snap=>{
+      let n=0;
+      snap.forEach(doc=>{
+        const f=doc.data()||{};
+        const text=String(f.text||f.name||"").trim();
+        if(text && importOne({text, who:f.who, area:f.area, date:f.date})) n++;
+        doc.ref.delete().catch(()=>{});
+      });
+      if(n){ showToast("Added "+n+" to the List"); render(); }
+    }, ()=>{});
 }
 
 /* ============================== seeding =========================== */
@@ -256,6 +337,11 @@ function todosForSel(){
     .filter(t=>t.kind==="todo" && !t._gone && t.weekKey===wk && t.day===selDay)
     .sort((a,b)=>(a.done-b.done)||((a.order||0)-(b.order||0)));
 }
+function masterTodos(){
+  return Object.values(items)
+    .filter(t=>t.kind==="todo" && !t._gone && !t.weekKey)
+    .sort((a,b)=>(a.done-b.done)||((a.order||0)-(b.order||0)));
+}
 function checkId(tid){ return "k:"+curWeekKey()+":"+selDay+":"+tid; }
 function isChecked(tid){ return !!items[checkId(tid)]; }
 function isSeeded(t){ return !!t && (t.seed || /^(s:|info:|care:|clean:|tpl:)/.test(t.id)); }
@@ -290,8 +376,33 @@ function cycleWho(id){ const t=items[id]; if(!t) return; t.who=WHO_ORDER[(WHO_OR
 function addTodo(text){
   text=(text||"").trim(); if(!text) return;
   const id="c:"+Date.now()+Math.random().toString(36).slice(2,6);
-  put({ id, kind:"todo", text, who:pendWho, weekKey:curWeekKey(), day:selDay, done:false, order:Date.now() });
+  put({ id, kind:"todo", text, who:pendWho, area:classify(text).area,
+        weekKey:curWeekKey(), day:selDay, done:false, order:Date.now() });
   render();
+}
+
+/* one dumped task in (from typing, Siri, or an import) — auto-sorted */
+function importOne(o){
+  const raw=(o.text||"").trim(); if(!raw) return null;
+  const parsed=extractDay(raw);
+  const guess=classify(parsed.text);
+  const doc={ id:"c:"+Date.now()+Math.random().toString(36).slice(2,6), kind:"todo",
+    text:parsed.text, who:WHO[o.who]?o.who:guess.who, area:AREAS[o.area]?o.area:guess.area,
+    done:false, weekKey:null, day:null, order:Date.now() };
+  const iso=o.date||parsed.iso;
+  if(iso && !isNaN(new Date(iso+"T00:00:00").getTime())){
+    const d=new Date(iso+"T00:00:00");
+    doc.weekKey=weekKeyOf(d); doc.day=(d.getDay()+6)%7;
+  }
+  put(doc); return doc;
+}
+function importMany(arr){
+  let n=0;
+  (Array.isArray(arr)?arr:[]).forEach(o=>{
+    if(typeof o==="string") o={text:o};
+    if(o && typeof o==="object" && importOne(o)) n++;
+  });
+  return n;
 }
 function addTpl(sec, scope, check){
   const id="u:"+Date.now()+Math.random().toString(36).slice(2,5);
@@ -396,16 +507,24 @@ function openEditor(id, fresh){
   show("edSecondWrap", false);
   show("edSplitToggle", !isInfo && !isProj && !isAppt);
   document.getElementById("edSplitToggle").innerHTML='<svg width="15" height="15"><use href="#i-split"/></svg> Split into two';
+  const isTodo = t.kind==="todo";
   show("edWhoRow", hasWho);
   show("edIconRow", isCare);
-  show("edDateRow", isStep || isAppt);
+  show("edDateRow", isStep || isAppt || isTodo);
   show("edTimeRow", isAppt);
   show("edRepeatRow", isAppt);
   show("edRemindRow", isAppt);
   show("edDelete", !isInfo);
-  document.getElementById("edDateLabel").textContent = isAppt ? "Date" : "Remind me on";
-  show("edDateHint", isStep);
-  if(isStep){ document.getElementById("edDate").value = t.schedISO || ""; }
+  document.getElementById("edDateLabel").textContent = isAppt ? "Date" : (isTodo ? "Do on" : "Remind me on");
+  show("edDateHint", isStep || isTodo);
+  if(isStep){
+    document.getElementById("edDateHint").textContent="A gentle nudge on that day — never a hard deadline. If it slips, it just drifts to today.";
+    document.getElementById("edDate").value = t.schedISO || "";
+  }
+  if(isTodo){
+    document.getElementById("edDateHint").textContent="Blank = stays on the master List. Day to-dos left unfinished roll forward each week.";
+    document.getElementById("edDate").value = (t.weekKey && t.day!=null) ? isoOfWeekDay(t.weekKey, t.day) : "";
+  }
   if(isAppt){
     document.getElementById("edDate").value = t.date || "";
     document.getElementById("edTime").value = t.time || "";
@@ -464,6 +583,12 @@ function saveEditor(){
   if(hasWho) t.who=edWho;
   if(t.kind==="tpl" && t.sec==="care") t.icon=edIcon;
   if(t.kind==="pstep"){ const v=document.getElementById("edDate").value; t.schedISO = v || null; }
+  if(t.kind==="todo"){
+    const v=document.getElementById("edDate").value;
+    if(v){ const d=new Date(v+"T00:00:00"); t.weekKey=weekKeyOf(d); t.day=(d.getDay()+6)%7; }
+    else { t.weekKey=null; t.day=null; }
+    if(!t.area) t.area=classify(t.text).area;
+  }
   if(t.kind==="appt"){
     t.date = document.getElementById("edDate").value || t.date;
     t.time = document.getElementById("edTime").value || "";
@@ -567,9 +692,11 @@ function render(){
   if(!HAS_DOM) return;
   updateTabs();
   show("viewWeek", view==="week");
+  show("viewList", view==="list");
   show("viewProjects", view==="projects");
   show("viewNotes", view==="notes");
   if(view==="week") renderWeek();
+  else if(view==="list") renderList();
   else if(view==="projects") renderProjects();
   else renderNotes();
 }
@@ -579,6 +706,10 @@ function updateTabs(){
   const n=unreadCount();
   badge.textContent = n? String(n) : "";
   badge.style.display = n? "" : "none";
+  const lb=document.getElementById("listBadge");
+  const ln=masterTodos().filter(t=>!t.done).length;
+  lb.textContent = ln? String(ln) : "";
+  lb.style.display = ln? "" : "none";
 }
 
 function renderWeek(){
@@ -659,6 +790,42 @@ function renderWeek(){
   const j=document.getElementById("toToday");
   if(j) j.onclick=()=>{ currentMonday=mondayOf(new Date()); selDay=todayMonIndex(); render(); };
   wireWeek();
+}
+
+/* master List — the digital "Household To-Do List": who, then area */
+function renderList(){
+  const all=masterTodos();
+  const secs=[["both","Both of Us"],["ben","Ben"],["lindsay","Lindsay"]].map(function(g){
+    const w=g[0], label=g[1];
+    const mine=all.filter(t=>(t.who||"both")===w);
+    if(!mine.length) return "";
+    const open=mine.filter(t=>!t.done).length;
+    const byArea=AREA_ORDER.map(a=>{
+      const rows=mine.filter(t=>(t.area||"other")===a);
+      if(!rows.length) return "";
+      return `<div class="grp">${esc(AREAS[a])}</div><ul class="items">${rows.map(todoRow).join("")}</ul>`;
+    }).join("");
+    return `<div class="card"><div class="ctitle ${w==="lindsay"?"pink":""}"><svg><use href="#i-list"/></svg>${label} · ${open} to do</div>${byArea}</div>`;
+  }).join("");
+  const empty=`<div class="emptybig"><svg width="34" height="34"><use href="#i-list"/></svg><p>The master list is empty.<br>Type below, say it to Siri, or import a dump — it sorts itself.</p></div>`;
+  document.getElementById("listBody").innerHTML = `
+    <div class="card">
+      <div class="addrow" style="margin-top:0;padding-top:0;border-top:0">
+        <input type="text" id="listNewText" placeholder="Dump a task — it sorts itself…" autocomplete="off" />
+        <button class="add" id="listAddBtn" aria-label="Add"><svg width="22" height="22"><use href="#i-plus"/></svg></button>
+      </div>
+      <div class="pmeta" style="margin-top:8px">Sorted by who, then area — tap a tag to fix a guess. Say "on Thursday" to send it straight to a day.</div>
+    </div>
+    ${secs || empty}`;
+  wireList();
+}
+function wireList(){
+  const add=document.getElementById("listAddBtn"), input=document.getElementById("listNewText");
+  if(!add||!input) return;
+  const go=()=>{ const v=input.value.trim(); if(!v) return; importOne({text:v}); render();
+    const i2=document.getElementById("listNewText"); if(i2) i2.focus(); };
+  add.onclick=go;
+  input.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
 }
 
 function renderProjects(){
@@ -791,6 +958,16 @@ if(HAS_DOM){
     else if(act==="editstep" || act==="editappt"){ openEditor(id); }
   });
 
+  /* master list delegation */
+  document.getElementById("listBody").addEventListener("click", e=>{
+    const el=e.target.closest("[data-act]"); if(!el) return;
+    const row=el.closest("[data-id]"); if(!row) return;
+    const id=row.dataset.id, act=el.dataset.act;
+    if(act==="todocheck"){ toggleTodo(id); render(); }
+    else if(act==="cycwho"){ cycleWho(id); }
+    else if(act==="edititem" || act==="editbtn"){ openEditor(id); }
+  });
+
   /* projects view delegation */
   document.getElementById("projectsBody").addEventListener("click", e=>{
     const el=e.target.closest("[data-act]"); if(!el) return;
@@ -883,6 +1060,21 @@ if(HAS_DOM){
       seedTodosIfNeeded(true); overlaySettings.classList.remove("show"); render();
     }
   };
+  /* import an agent-sorted dump — JSON format in DUMP-IMPORT.md */
+  document.getElementById("setImport").onclick=()=>document.getElementById("importFile").click();
+  document.getElementById("importFile").addEventListener("change", e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      let n=0;
+      try{ n=importMany(JSON.parse(r.result)); }
+      catch(err){ alert("Couldn't read that file — expected a JSON list of tasks (see DUMP-IMPORT.md)."); return; }
+      overlaySettings.classList.remove("show");
+      view="list"; render();
+      showToast("Imported "+n+" task"+(n===1?"":"s"));
+    };
+    r.readAsText(f);
+  });
   document.getElementById("welcomeStart").onclick=()=>{
     const v=document.getElementById("welcomeCode").value.trim();
     if(!v){ document.getElementById("welcomeCode").focus(); return; }
@@ -912,6 +1104,7 @@ function showToast(msg){
   if(!HAS_DOM) return;
   const toast=document.getElementById("toast");
   document.getElementById("toastMsg").textContent=msg;
+  document.getElementById("toastUndo").style.display = lastDeleted ? "" : "none";
   toast.classList.add("show");
   clearTimeout(undoTimer);
   undoTimer=setTimeout(()=>{ toast.classList.remove("show"); lastDeleted=null; },5000);
@@ -963,6 +1156,18 @@ if(!HAS_DOM){
   console.log("comingUp includes today's dentist:", comingUp().some(o=>o.a.id==="appt:1"));
   items["appt:1"].remind="none";
   console.log("remind=none drops from comingUp:", !comingUp().some(o=>o.a.id==="appt:1"));
+
+  /* master list: auto-sorting + dumps */
+  console.log("classify rake → yard/ben:", (function(){const c=classify("Rake the lawn"); return c.area==="yard"&&c.who==="ben";})());
+  console.log("classify list TVs → selling/lindsay:", (function(){const c=classify("List the TVs"); return c.area==="selling"&&c.who==="lindsay";})());
+  console.log("classify paint toenails → personal (not paint):", classify("Paint toenails").area==="personal");
+  console.log("classify dresser to shop → shop/both:", (function(){const c=classify("Take the dresser to the shop"); return c.area==="shop"&&c.who==="both";})());
+  const mt=importOne({text:"Fabric-clean the ottoman"});
+  console.log("dump lands on master list:", mt.weekKey===null && mt.area==="cleaning");
+  const st2=importOne({text:"Mow the lawn on Thursday"});
+  console.log("'on Thursday' schedules to a day:", !!st2.weekKey && st2.day===3 && st2.text==="Mow the lawn");
+  console.log("import file shape works:", importMany([{text:"Water the plants"},"Bottle depot"])===2);
+  console.log("masterTodos groups them:", masterTodos().length>=3);
   console.log("OK");
 }
 function saveLocalSafe(){ try{ saveLocal(); }catch(e){} }
