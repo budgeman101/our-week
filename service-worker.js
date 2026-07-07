@@ -1,6 +1,6 @@
 /* Our Week — offline cache.
    Bump CACHE when you change files so phones pick up the update. */
-const CACHE = "our-week-v18";
+const CACHE = "our-week-v19";
 const ASSETS = [
   "./",
   "./index.html",
@@ -36,4 +36,30 @@ self.addEventListener("fetch", e => {
       return res;
     }).catch(() => caches.match(req).then(r => r || caches.match("./index.html")))
   );
+});
+
+/* ---- push reminders -------------------------------------------------
+   The free cloud sender (see REMINDERS-SETUP.md) posts a small JSON
+   payload; we just show it. Works even when the app is closed. */
+self.addEventListener("push", e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
+  const title = d.title || "Our Week";
+  e.waitUntil(self.registration.showNotification(title, {
+    body: d.body || "",
+    icon: "./icon-192.png",
+    badge: "./icon-192.png",
+    tag: d.tag || undefined,       // same tag replaces an earlier one instead of stacking
+    renotify: !!d.tag,
+    data: { url: d.url || "./" }
+  }));
+});
+
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "./";
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+    for (const c of list) { if ("focus" in c) return c.focus(); }
+    if (self.clients.openWindow) return self.clients.openWindow(url);
+  }));
 });

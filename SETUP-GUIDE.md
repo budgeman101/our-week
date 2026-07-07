@@ -161,3 +161,5 @@ Add it to the home screen so it opens full-screen with its own icon:
 | `SETUP-GUIDE.md` | This file. |
 | `SIRI-SETUP.md` | "Hey Siri, add to Our Week" — voice dumps into the List. |
 | `DUMP-IMPORT.md` | Bulk dumps: agent-sorted notebook/notes piles, imported or pushed in. |
+| `REMINDERS-SETUP.md` | Turn on free push reminders (shift/appointment notifications). |
+| `reminders/`, `.github/workflows/` | The free cloud sender that pushes those reminders. |

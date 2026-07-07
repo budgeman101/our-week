@@ -1,0 +1,38 @@
+name: Our Week reminders
+
+# Runs the free reminder sender on a schedule. GitHub Actions cron is in UTC
+# and can drift a few minutes — fine for "your shift starts soon" nudges.
+on:
+  schedule:
+    - cron: "*/15 * * * *"     # every 15 minutes
+  workflow_dispatch: {}         # also gives you a manual "Run workflow" button for testing
+
+# Only one run at a time; a slow run won't pile up on the next.
+concurrency:
+  group: reminders
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        working-directory: reminders
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Send due reminders
+        working-directory: reminders
+        run: node sender.js
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_API_KEY:    ${{ secrets.FIREBASE_API_KEY }}
+          HOUSEHOLD_CODE:      ${{ secrets.HOUSEHOLD_CODE }}
+          TIMEZONE:            ${{ secrets.TIMEZONE }}
+          VAPID_PUBLIC_KEY:    ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY:   ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT:       ${{ secrets.VAPID_SUBJECT }}
+          # Optional tuning (defaults shown): SHIFT_LEAD_MIN=60, APPT_MORNING_HOUR=8,
+          # APPT_DAYBEFORE_HOUR=18, MAX_AGE_MIN=180

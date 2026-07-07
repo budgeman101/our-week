@@ -25,6 +25,14 @@ const firebaseConfig = {
 };
 const CONFIGURED = !String(firebaseConfig.apiKey).startsWith("PASTE_");
 
+/* ------------------------------------------------------------------ *
+ *  PUSH REMINDERS — paste your VAPID PUBLIC key here (safe to publish).
+ *  The matching private key lives only in the free cloud sender.
+ *  Full walkthrough in REMINDERS-SETUP.md.
+ * ------------------------------------------------------------------ */
+const VAPID_PUBLIC_KEY = "BO4M0rjTcevPmcBdN76KMv0Z28_oMZ0zByxUh2OsH0pJuOKGnO5sIEO2p2sQkm6g2ZlruNb2rtqiO-LV15GQDQ0";
+const PUSH_KEYED = /^[A-Za-z0-9_-]{80,}$/.test(VAPID_PUBLIC_KEY);
+
 /* ============================ constants =========================== */
 const WHO = { ben:"Ben", lindsay:"Lindsay", both:"Both" };
 const WHO_ORDER = ["ben","lindsay","both"];
@@ -282,6 +290,52 @@ function drainInbox(){
       if(n){ showToast("Added "+n+" to the List"); render(); }
     }, ()=>{});
 }
+
+/* ============================ push reminders ====================== */
+function pushSupported(){ return HAS_DOM && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+function urlB64ToUint8(b64){
+  const pad="=".repeat((4-b64.length%4)%4);
+  const s=(b64+pad).replace(/-/g,"+").replace(/_/g,"/");
+  const raw=atob(s); const out=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+  return out;
+}
+// off | on | denied | needs-sync | needs-keys | unsupported
+function reminderState(){
+  if(!pushSupported()) return "unsupported";
+  if(!CONFIGURED) return "needs-sync";     // no Firebase = nowhere to store the sub / no sender
+  if(!PUSH_KEYED) return "needs-keys";     // VAPID key not pasted yet
+  if(Notification.permission==="denied") return "denied";
+  return Notification.permission==="granted" ? "on" : "off";
+}
+async function enableReminders(){
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm!=="granted") return perm==="denied" ? "denied" : "off";
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC_KEY) });
+    const j = sub.toJSON();
+    if(db && household){
+      const id = "sub_"+Math.abs(hashStr(j.endpoint)).toString(36);
+      db.collection("households").doc(household).collection("push").doc(id)
+        .set({ endpoint:j.endpoint, p256dh:j.keys.p256dh, auth:j.keys.auth, who:me||null, ua:navigator.userAgent, ts:Date.now() }).catch(()=>{});
+    }
+    return "on";
+  }catch(e){ console.error("reminders:", e); return "error"; }
+}
+async function disableReminders(){
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if(sub){
+      const id = "sub_"+Math.abs(hashStr(sub.endpoint)).toString(36);
+      if(db && household) db.collection("households").doc(household).collection("push").doc(id).delete().catch(()=>{});
+      await sub.unsubscribe();
+    }
+  }catch(e){ console.error("reminders off:", e); }
+}
+function hashStr(s){ let h=0; for(let i=0;i<String(s).length;i++){ h=(h*31+s.charCodeAt(i))|0; } return h; }
 
 /* ============================== seeding =========================== */
 function setMeta(id){ items[id]={id,kind:"meta",done:true}; if(colRef) colRef.doc(id).set(items[id]).catch(()=>{}); }
@@ -688,6 +742,7 @@ function updateEdWho(){ const b=document.getElementById("edWhoBtn"); b.className
 function updateEdIcon(){ document.getElementById("edIconBtn").innerHTML='<svg><use href="#'+edIcon+'"/></svg>'; }
 function show(id, on){ document.getElementById(id).style.display = on?"":"none"; }
 function openEditor(id, fresh){
+  if(!HAS_DOM){ editingId=id; editingFresh=!!fresh; return; }   // no editor without a DOM (node tests)
   const t=items[id]; if(!t) return;
   editingId=id; editingFresh=!!fresh; splitMode=false;
   const isInfo = t.kind==="info";
@@ -1402,8 +1457,33 @@ if(HAS_DOM){
     document.getElementById("setMeta").innerHTML=CONFIGURED
       ? "Everyone using this code shares one live plan. Changing the code switches to a different plan."
       : "To sync across phones, add your Firebase keys in <code>app.js</code> — see <code>SETUP-GUIDE.md</code>.";
+    paintReminders();
     overlaySettings.classList.add("show");
   }
+  function paintReminders(){
+    const st=document.getElementById("remindStatus"), btn=document.getElementById("remindBtn");
+    const dot='<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg>';
+    const s=reminderState();
+    const map={
+      on:           [dot+" Reminders are ON for this phone", "synced", "Turn off"],
+      off:          [dot+" Reminders are off on this phone", "local", "Turn on reminders"],
+      denied:       [dot+" Notifications are blocked in your phone settings", "local", "How to fix"],
+      "needs-sync": [dot+" Turn on live sync first (Option 2 in the setup guide)", "local", null],
+      "needs-keys": [dot+" Reminders aren't set up yet — see REMINDERS-SETUP.md", "local", null],
+      unsupported:  [dot+" Add the app to your Home Screen first, then reminders can turn on", "local", null],
+    };
+    const row=map[s]||map.off;
+    st.innerHTML=row[0]; st.className="statusline "+row[1];
+    if(row[2]){ btn.style.display=""; btn.textContent=row[2]; } else { btn.style.display="none"; }
+    btn.dataset.state=s;
+  }
+  document.getElementById("remindBtn").onclick=async ()=>{
+    const s=document.getElementById("remindBtn").dataset.state;
+    if(s==="on"){ await disableReminders(); }
+    else if(s==="denied"){ alert("Notifications are blocked for the app. On iPhone: Settings → Notifications → Our Week → allow. (Or delete the Home Screen app and re-add it, then turn reminders on again.)"); }
+    else { const r=await enableReminders(); if(r==="error") alert("Couldn't turn on reminders — check REMINDERS-SETUP.md is finished."); }
+    paintReminders();
+  };
   document.getElementById("gear").onclick=openSettings;
   document.getElementById("printBtn").onclick=doPrint;
   document.getElementById("setClose").onclick=()=>overlaySettings.classList.remove("show");
@@ -1483,23 +1563,24 @@ if(!HAS_DOM){
   me="lindsay"; ackNote(note.id); me="ben";
   console.log("after ack, unread:", unreadCount(), "(0)", "| seenBy set:", !!items[note.id].seenBy);
 
-  /* projects + scheduled step */
-  addProject(); // creates blank; simulate edit
-  let proj=projectsAll()[0]; proj.title="Stairs"; proj.who="ben"; put(proj);
-  const sid="pstep:test"; items[sid]={id:sid, kind:"pstep", projectId:proj.id, text:"Prime + paint", done:false, schedISO:"2026-06-20", order:0};
+  /* projects + scheduled step (dates relative to today so it never goes stale) */
+  const futSat=(()=>{ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate() + (6-((d.getDay()+6)%7)) + 14); return d; })(); // a Saturday ~2 weeks out
+  const futISO=isoOf(futSat);
+  const proj={id:"proj:test", kind:"project", title:"Stairs", who:"ben", order:0, ts:1000};
+  items[proj.id]=proj;
+  const sid="pstep:test"; items[sid]={id:sid, kind:"pstep", projectId:proj.id, text:"Prime + paint", done:false, schedISO:futISO, order:0};
   saveLocalSafe();
   console.log("project steps:", stepsFor(proj.id).length, "(1)");
-  // scheduled on its date
-  console.log("shows on 2026-06-20:", scheduledStepsFor("2026-06-20").length===1);
+  console.log("shows on its scheduled date:", scheduledStepsFor(futISO).length===1);
   // gentle drift: an old undone step shows on today
   items["pstep:old"]={id:"pstep:old", kind:"pstep", projectId:proj.id, text:"Old step", done:false, schedISO:"2000-01-01", order:1};
   console.log("old undone step drifts to today:", scheduledStepsFor(todayISO()).some(s=>s.id==="pstep:old"));
   console.log("old step NOT shown on its past date:", scheduledStepsFor("2000-01-01").length===0);
   // done step stays on its date (history), not today
   items[sid].done=true;
-  console.log("done step stays on date:", scheduledStepsFor("2026-06-20").length===1);
+  console.log("done step stays on date:", scheduledStepsFor(futISO).length===1);
   // week-view progress includes scheduled steps
-  selDay=5; currentMonday=mondayOf(new Date("2026-06-16T00:00:00")); // Sat 2026-06-20
+  selDay=5; currentMonday=mondayOf(futSat);
   const pr=dayProgress(); console.log("Sat progress total includes sched step:", pr.total>=16, "total", pr.total);
   const ph=printWeekHTML();
   console.log("print: Monday:", ph.includes("Monday"), "| Every day:", ph.includes("Every day"), "| boxes:", ph.includes("pbox"), "| bold-both:", ph.includes("pboth"));
@@ -1585,7 +1666,7 @@ if(!HAS_DOM){
   const wh=projectsAll().slice().sort(projectCompare("who")).map(p=>p.who);
   console.log("who sort ben before lindsay:", wh.indexOf("ben")<wh.indexOf("lindsay"));
   const rc=projectsAll().slice().sort(projectCompare("recent")).map(p=>p.id);
-  console.log("recent sort newest first:", rc[0]==="proj:zebra");
+  console.log("recent sort newest first:", rc.indexOf("proj:zebra")<rc.indexOf("proj:apple"));
   const pg=projectsAll().slice().sort(projectCompare("progress")).map(p=>p.id);
   console.log("progress sort least-done first:", pg.indexOf("proj:apple")<pg.indexOf("proj:zebra"));
 

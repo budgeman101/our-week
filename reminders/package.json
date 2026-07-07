@@ -1,0 +1,15 @@
+{
+  "name": "our-week-reminders",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Free cloud sender that pushes Our Week reminders to phones (runs on GitHub Actions cron).",
+  "type": "commonjs",
+  "scripts": {
+    "send": "node sender.js",
+    "test": "node test.js",
+    "keys": "web-push generate-vapid-keys --json"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

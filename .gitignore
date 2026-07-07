@@ -4,3 +4,9 @@
 # OS cruft
 Thumbs.db
 .DS_Store
+
+# Reminder sender — never commit secrets or installed packages
+reminders/node_modules/
+reminders/secrets.local.txt
+reminders/.env
+reminders/package-lock.json
