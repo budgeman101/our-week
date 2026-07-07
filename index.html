@@ -185,6 +185,9 @@
   .pbar{height:7px; background:var(--line); border-radius:999px; overflow:hidden; margin:10px 0 4px}
   .pbar span{display:block; height:100%; background:var(--green); border-radius:999px; transition:width .25s}
   .pmeta{font-size:.72rem; color:var(--faint); margin-bottom:2px}
+  .projactions{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px}
+  .projactions .addmini{margin-top:0}
+  .projactions .addmini.left{margin-top:0}
   .bigadd{width:100%; margin-top:6px; background:var(--card); border:1px dashed var(--line); color:var(--accent); border-radius:12px; padding:12px; font-weight:700; font-size:.92rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px}
   .bigadd:active{transform:scale(.99)}
   .emptybig{text-align:center; color:var(--faint); padding:34px 12px}
@@ -354,6 +357,7 @@
       <span class="projbar-label" id="projCount">Projects</span>
       <label class="sortsel">Sort
         <select id="projSort">
+          <option value="smart">Auto (soonest first)</option>
           <option value="custom">My order</option>
           <option value="progress">Progress</option>
           <option value="who">Person</option>

@@ -80,6 +80,13 @@ function classify(text){
   for(const r of WHO_RULES){ if(r[1].test(s)){ who=r[0]; break; } }
   return { area, who: who || AREA_WHO_DEFAULT[area] || "both" };
 }
+// who for a project step: only override the project's person when the step
+// wording strongly points at someone, else inherit the project.
+function classifyWho(text, fallback){
+  const s=String(text).toLowerCase();
+  for(const r of WHO_RULES){ if(r[1].test(s)) return r[0]; }
+  return fallback || "both";
+}
 
 /* "…on thursday" / "…tomorrow" schedules straight onto that day */
 const DAY_WORDS = { monday:0, tuesday:1, wednesday:2, thursday:3, friday:4, saturday:5, sunday:6 };
@@ -173,14 +180,14 @@ let items = {};
 let household = localStorage.getItem("ow-household") || "";
 let me = localStorage.getItem("ow-me") || "";
 let view = "week";
-let projSort = localStorage.getItem("ow-projsort") || "custom";
+let projSort = localStorage.getItem("ow-projsort") || "smart";
 let currentMonday = mondayOf(new Date());
 let selDay = todayMonIndex();
 let pendWho = "ben";
 let welcomeId = "";
 let db = null, colRef = null, unsub = null, inboxUnsub = null, fbStarted = false;
 let undoTimer = null, lastDeleted = null;
-let editingId = null, edWho = "ben", edIcon = "i-paw", splitMode = false, editingFresh = false;
+let editingId = null, edWho = "ben", edWhoStart = "ben", edIcon = "i-paw", splitMode = false, editingFresh = false;
 
 /* ============================= date utils ========================= */
 function mondayOf(d){
@@ -468,10 +475,43 @@ function addProject(){
 function addStep(pid){
   const id="pstep:"+Date.now()+Math.random().toString(36).slice(2,5);
   const order = stepsFor(pid).length;
-  put({ id, kind:"pstep", projectId:pid, text:"", done:false, schedISO:null, order });
+  const p=items[pid]; const who = p ? (p.who||"both") : "both";
+  put({ id, kind:"pstep", projectId:pid, text:"", done:false, schedISO:null, who, order });
   openEditor(id, true);
 }
 function cycleProjWho(id){ cycleWho(id); }
+function cycleStepWho(id){
+  const t=items[id]; if(!t) return;
+  t.whoManual=true;
+  t.who=WHO_ORDER[(WHO_ORDER.indexOf(t.who||"both")+1)%WHO_ORDER.length];
+  put(t); render();
+}
+
+/* auto-scheduling: spread a project's unfinished steps onto upcoming days, one
+   per day. Lindsay's steps skip her recovery days (the day AFTER a night shift,
+   when she's wiped) — same signal the energy line uses. Ben/Both go any day. */
+function dayBlockedFor(who, iso){
+  if(who==="lindsay") return shiftsForDate(prevISO(iso)).some(isNightShift);
+  return false;
+}
+function autoScheduleProject(pid){
+  const steps=stepsFor(pid).filter(s=>!s.done).sort(byOrder);
+  const used=new Set(steps.filter(s=>s.schedISO).map(s=>s.schedISO));
+  const cursor=new Date(); cursor.setDate(cursor.getDate()+1);   // start tomorrow
+  let n=0;
+  steps.forEach(s=>{
+    if(s.schedISO) return;                                       // keep dates you set by hand
+    const who=s.who||(projectOf(s)||{}).who||"both";
+    let guard=0;
+    while(guard++<400){
+      const iso=isoOf(cursor);
+      cursor.setDate(cursor.getDate()+1);
+      if(used.has(iso) || dayBlockedFor(who, iso)) continue;
+      s.schedISO=iso; used.add(iso); put(s); n++; break;
+    }
+  });
+  return n;
+}
 
 /* ============================ appointments ======================== */
 function weekdayOf(iso){ return (new Date(iso+"T00:00:00").getDay()+6)%7; }
@@ -588,8 +628,8 @@ function openEditor(id, fresh){
   const isStep = t.kind==="pstep";
   const isAppt = t.kind==="appt";
   const isShift = t.kind==="shift";
-  const hasWho = t.kind==="todo" || (t.kind==="tpl" && t.check) || isProj || isAppt;
-  edWho=t.who||"ben"; edIcon=t.icon||"i-paw";
+  const hasWho = t.kind==="todo" || (t.kind==="tpl" && t.check) || isProj || isAppt || isStep;
+  edWho=t.who||"ben"; edWhoStart=edWho; edIcon=t.icon||"i-paw";
   let title="Edit item";
   if(isInfo) title=labelForInfo(t.field);
   else if(isCare) title="Edit note";
@@ -704,10 +744,18 @@ function saveEditor(){
     document.getElementById("edText").focus(); return;
   }
   if(t.kind==="project"||t.kind==="appt") t.title=text1; else t.text=text1;
-  const hasWho = t.kind==="todo" || (t.kind==="tpl" && t.check) || t.kind==="project" || t.kind==="appt";
-  if(hasWho) t.who=edWho;
+  const whoTouched = (edWho !== edWhoStart);
+  if(t.kind==="project"){
+    if(whoTouched) t.whoManual=true;
+    t.who = t.whoManual ? edWho : classify(text1).who;   // auto-tag who unless set by hand
+  } else if(t.kind==="pstep"){
+    if(whoTouched) t.whoManual=true;
+    t.who = t.whoManual ? edWho : classifyWho(text1, (projectOf(t)||{}).who||"both");
+    const v=document.getElementById("edDate").value; t.schedISO = v || null;
+  } else if(t.kind==="todo" || (t.kind==="tpl" && t.check) || t.kind==="appt"){
+    t.who=edWho;
+  }
   if(t.kind==="tpl" && t.sec==="care") t.icon=edIcon;
-  if(t.kind==="pstep"){ const v=document.getElementById("edDate").value; t.schedISO = v || null; }
   if(t.kind==="todo"){
     const v=document.getElementById("edDate").value;
     if(v){ const d=new Date(v+"T00:00:00"); t.weekKey=weekKeyOf(d); t.day=(d.getDay()+6)%7; }
@@ -771,10 +819,12 @@ function todoRow(t){
 }
 function schedStepRow(s){
   const p=projectOf(s);
-  return `<li><div class="item reminder ${s.done?'done':''}" data-id="${s.id}">
+  const who=s.who||(p?p.who:"both")||"both";
+  return `<li><div class="item ${who} reminder ${s.done?'done':''}" data-id="${s.id}">
     <div class="box" data-act="stepcheck"><svg><use href="#i-check"/></svg></div>
     <div class="lab"><span class="txt" data-act="editstep">${esc(s.text)}</span>
       <span class="sub"><svg class="tiny"><use href="#i-folder"/></svg> ${esc(p?p.title:"Project")}</span></div>
+    <button class="who ${who}" data-act="cycstepwho">${WHO[who]}</button>
     <button class="editb" data-act="editstep" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
 }
@@ -977,9 +1027,23 @@ function wireList(){
 }
 
 function projectProgress(p){ const s=stepsFor(p.id); return s.length ? s.filter(x=>x.done).length/s.length : 0; }
+function projectDone(p){ const s=stepsFor(p.id); return s.length>0 && s.every(x=>x.done); }
+function projectNextDate(p){
+  const ds=stepsFor(p.id).filter(s=>!s.done&&s.schedISO).map(stepEffectiveISO);
+  return ds.length ? ds.sort()[0] : null;
+}
 function projectCompare(mode){
   switch(mode){
-    // least-done first (fully-finished sink to the bottom), then custom order
+    // self-ordering default: active projects with the soonest scheduled step
+    // first; unscheduled next; finished ones sink to the bottom.
+    case "smart": return (a,b)=>{
+      const ad=projectDone(a), bd=projectDone(b);
+      if(ad!==bd) return ad?1:-1;
+      const an=projectNextDate(a), bn=projectNextDate(b);
+      if(an&&bn) return an.localeCompare(bn) || (a.order||0)-(b.order||0);
+      if(an) return -1; if(bn) return 1;
+      return (a.order||0)-(b.order||0);
+    };
     case "progress": return (a,b)=> projectProgress(a)-projectProgress(b) || (a.order||0)-(b.order||0);
     case "who":      return (a,b)=> WHO_ORDER.indexOf(a.who)-WHO_ORDER.indexOf(b.who) || (a.order||0)-(b.order||0);
     case "name":     return (a,b)=> (a.title||"Untitled").localeCompare(b.title||"Untitled", undefined, {sensitivity:"base"}) || (a.order||0)-(b.order||0);
@@ -991,6 +1055,7 @@ function projectCardHTML(p){
   const steps=stepsFor(p.id);
   const done=steps.filter(s=>s.done).length;
   const pct = steps.length ? Math.round(done/steps.length*100) : 0;
+  const unscheduled = steps.some(s=>!s.done && !s.schedISO);
   return `<div class="proj" data-id="${p.id}">
     <div class="projhd">
       <span class="ptitle" data-act="editproj">${esc(p.title||"Untitled project")}</span>
@@ -1000,7 +1065,10 @@ function projectCardHTML(p){
     <div class="pbar"><span style="width:${pct}%"></span></div>
     <div class="pmeta">${done}/${steps.length} done</div>
     <ul class="items">${steps.map(stepRow).join("")||'<li class="emptyhint">No steps yet.</li>'}</ul>
-    <button class="addmini left" data-act="addstep" data-pid="${p.id}"><svg><use href="#i-plus"/></svg>Add step</button>
+    <div class="projactions">
+      <button class="addmini left" data-act="addstep" data-pid="${p.id}"><svg><use href="#i-plus"/></svg>Add step</button>
+      ${unscheduled?`<button class="addmini" data-act="autosched" data-pid="${p.id}"><svg><use href="#i-clock"/></svg>Auto-schedule</button>`:""}
+    </div>
   </div>`;
 }
 function renderProjects(){
@@ -1020,10 +1088,13 @@ function renderProjects(){
   document.getElementById("projectsBody").innerHTML = html;
 }
 function stepRow(s){
+  const p=projectOf(s);
+  const who=s.who||(p?p.who:"both")||"both";
   const sched = s.schedISO ? `<span class="sub"><svg class="tiny"><use href="#i-clock"/></svg> ${fmtDateShort(stepEffectiveISO(s))}${(!s.done&&s.schedISO<todayISO())?" (rolled to today)":""}</span>` : "";
-  return `<li><div class="item ${s.done?'done':''}" data-id="${s.id}">
+  return `<li><div class="item ${who} ${s.done?'done':''}" data-id="${s.id}">
     <div class="box" data-act="stepcheck"><svg><use href="#i-check"/></svg></div>
     <div class="lab"><span class="txt" data-act="editstep">${esc(s.text)}</span>${sched}</div>
+    <button class="who ${who}" data-act="cycstepwho">${WHO[who]}</button>
     <button class="editb" data-act="editstep" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
 }
@@ -1085,7 +1156,7 @@ function printWeekHTML(){
     }
     h += `<div class="psec">To-dos</div>`;
     h += (todos.length||sched.length)
-      ? todos.map(t=>pItem(t.text,t.who)).join("") + sched.map(s=>pItem(s.text+" ("+(projectOf(s)?projectOf(s).title:"project")+")","")).join("")
+      ? todos.map(t=>pItem(t.text,t.who)).join("") + sched.map(s=>pItem(s.text+" ("+(projectOf(s)?projectOf(s).title:"project")+")", s.who||"")).join("")
       : `<div class="pline">—</div>`;
     h += `<div class="psec">Cleaning</div>`;
     h += clean.length ? clean.map(c=>pItem(c.text,c.who)).join("") : `<div class="pline">—</div>`;
@@ -1126,6 +1197,7 @@ if(HAS_DOM){
     else if(act==="stepcheck"){ toggleStep(id); render(); }
     else if(act==="apptcheck"){ toggleAppt(id, selDayISO()); render(); }
     else if(act==="cycwho"){ cycleWho(id); }
+    else if(act==="cycstepwho"){ cycleStepWho(id); }
     else if(act==="edititem" || act==="editbtn"){ openEditor(id); }
     else if(act==="editstep" || act==="editappt" || act==="editshift"){ openEditor(id); }
   });
@@ -1146,9 +1218,11 @@ if(HAS_DOM){
     const act=el.dataset.act;
     if(act==="addproj"){ addProject(); return; }
     if(act==="addstep"){ addStep(el.dataset.pid); return; }
+    if(act==="autosched"){ const n=autoScheduleProject(el.dataset.pid); showToast(n?("Scheduled "+n+" step"+(n===1?"":"s")):"No steps to schedule"); render(); return; }
     const row=el.closest("[data-id]"); if(!row) return;
     const id=row.dataset.id;
     if(act==="stepcheck"){ toggleStep(id); render(); }
+    else if(act==="cycstepwho"){ cycleStepWho(id); }
     else if(act==="editstep"){ openEditor(id); }
     else if(act==="editproj"){ openEditor(id); }
     else if(act==="cycprojwho"){ cycleProjWho(id); }
@@ -1415,6 +1489,25 @@ if(!HAS_DOM){
   console.log("recent sort newest first:", rc[0]==="proj:zebra");
   const pg=projectsAll().slice().sort(projectCompare("progress")).map(p=>p.id);
   console.log("progress sort least-done first:", pg.indexOf("proj:apple")<pg.indexOf("proj:zebra"));
+
+  /* auto-sort who + auto-schedule around Lindsay's recovery days */
+  console.log("classifyWho picks lindsay from wording:", classifyWho("wash the walls","ben")==="lindsay");
+  console.log("classifyWho inherits project who when generic:", classifyWho("second coat","ben")==="ben");
+  (function(){
+    // one active Monday-night shift → Tuesday is her recovery day (blocked)
+    items["shift:as"]={id:"shift:as",kind:"shift",date:"2026-08-03",start:"17:30",end:"",repeat:false}; // Mon
+    console.log("Lindsay blocked on recovery day (Tue):", dayBlockedFor("lindsay","2026-08-04")===true);
+    console.log("Lindsay free on the work day itself (Mon):", dayBlockedFor("lindsay","2026-08-03")===false);
+    console.log("Ben never blocked:", dayBlockedFor("ben","2026-08-04")===false);
+    items["proj:sch"]={id:"proj:sch",kind:"project",title:"Test",who:"lindsay",order:0,ts:1};
+    items["pstep:s1"]={id:"pstep:s1",kind:"pstep",projectId:"proj:sch",text:"a",who:"lindsay",done:false,schedISO:null,order:0};
+    items["pstep:s2"]={id:"pstep:s2",kind:"pstep",projectId:"proj:sch",text:"b",who:"lindsay",done:false,schedISO:null,order:1};
+    const n=autoScheduleProject("proj:sch");
+    const dates=[items["pstep:s1"].schedISO, items["pstep:s2"].schedISO];
+    console.log("auto-schedule placed both steps:", n===2 && dates.every(Boolean));
+    console.log("auto-schedule kept Lindsay off recovery days:", dates.every(d=>!dayBlockedFor("lindsay",d)));
+    delete items["shift:as"];
+  })();
   console.log("OK");
 }
 function saveLocalSafe(){ try{ saveLocal(); }catch(e){} }

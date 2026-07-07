@@ -130,7 +130,10 @@ Add it to the home screen so it opens full-screen with its own icon:
 - **Check things off** — tap the box. Checkmarks are tracked **per week**, so each week starts fresh while the plan itself stays put.
 - **Recurring vs one-off** — the routine, cleaning, care notes, and Lindsay's info **repeat every week** (cleaning and Lindsay's info are set per weekday); edits to them carry forward. **To-dos** are for that week, and anything you don't finish rolls into the current week automatically.
 - **Undo** — deleting shows a brief **Undo** button in case you tap by mistake.
-- **The Projects tab** — track multi-step jobs (like the stairs). Use the **Sort** menu top-right to order them by **My order** (as added), **Progress** (least-done first, finished ones drop to the bottom), **Person** (Ben / Lindsay / Both, with headings), **Name (A–Z)**, or **Recently added**. Your choice is remembered.
+- **The Projects tab** — track multi-step jobs (like the stairs), and it mostly runs itself:
+  - **Auto who-tags** — a new project (and each step) is auto-labelled **Ben / Lindsay / Both** from its wording, just like the List tab. Tap the coloured chip to change any of them; your change sticks.
+  - **Auto-orders itself** — projects sort so the ones with the **soonest scheduled step come first**, and finished ones drop to the bottom (the **Sort** menu top-right still lets you force My order / Progress / Person / Name / Recently added).
+  - **Auto-schedules around Lindsay** — tap **Auto-schedule** on a project to spread its unfinished steps across the coming days, one per day. **Lindsay's steps skip the day after she works** (her recovery day, when she's wiped) — it reads her real shifts, so it follows summer changes. Ben's and Both steps fill any day. Steps you've already dated by hand are left alone.
 - **Reset starters** — the **gear > Reload this week's starter to-dos** re-adds the original project to-dos for the week. Your own added items stay.
 - **Offline** — once opened (and hosted), the app works without signal; changes sync when you're back online.
 
