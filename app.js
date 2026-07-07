@@ -487,30 +487,75 @@ function cycleStepWho(id){
   put(t); render();
 }
 
-/* auto-scheduling: spread a project's unfinished steps onto upcoming days, one
-   per day. Lindsay's steps skip her recovery days (the day AFTER a night shift,
-   when she's wiped) — same signal the energy line uses. Ben/Both go any day. */
+/* ---- auto-scheduling: fill each day with as much as is reasonable ---------
+   A day holds ~DAY_CAPACITY tasks per person, counting everything already on
+   it across all inputs (appointments, that day's cleaning, to-dos, other
+   scheduled steps). Lindsay's work nights lower her capacity; her recovery
+   days (the day AFTER a night shift, when she's wiped) hold nothing. A single
+   project also caps at PROJ_PER_DAY steps a day so multi-step jobs still
+   breathe. Ben/Both fill any day with room. */
+const DAY_CAPACITY = 4;
+const PROJ_PER_DAY = 2;
 function dayBlockedFor(who, iso){
   if(who==="lindsay") return shiftsForDate(prevISO(iso)).some(isNightShift);
   return false;
 }
-function autoScheduleProject(pid){
-  const steps=stepsFor(pid).filter(s=>!s.done).sort(byOrder);
-  const used=new Set(steps.filter(s=>s.schedISO).map(s=>s.schedISO));
-  const cursor=new Date(); cursor.setDate(cursor.getDate()+1);   // start tomorrow
+function whoList(who){ return who==="both" ? ["ben","lindsay"] : [who]; }
+function personCapacity(who, iso){
+  if(who==="lindsay"){
+    if(dayBlockedFor("lindsay", iso)) return 0;                  // recovery day: nothing
+    if(shiftsForDate(iso).length) return Math.max(1, DAY_CAPACITY-2);  // works that night: lighter
+  }
+  return DAY_CAPACITY;
+}
+function personLoad(who, iso){
+  const wk=weekKeyOf(new Date(iso+"T00:00:00")), day=weekdayOf(iso);
+  const m = w => { const x=w||"both"; return x===who || x==="both"; };
   let n=0;
-  steps.forEach(s=>{
-    if(s.schedISO) return;                                       // keep dates you set by hand
-    const who=s.who||(projectOf(s)||{}).who||"both";
-    let guard=0;
+  Object.values(items).forEach(t=>{
+    if(t._gone||t.done) return;
+    if(t.kind==="todo"){ if(t.weekKey===wk && t.day===day && m(t.who)) n++; }
+    else if(t.kind==="pstep"){ if(t.schedISO && stepEffectiveISO(t)===iso && m(t.who||(projectOf(t)||{}).who)) n++; }
+    else if(t.kind==="appt"){ if(apptOccursOn(t, iso) && m(t.who)) n++; }
+  });
+  tplList("clean", day).forEach(c=>{ if(m(c.who)) n++; });
+  return n;
+}
+function fitsDay(who, iso){
+  return whoList(who).every(p=> personLoad(p, iso) < personCapacity(p, iso));
+}
+function projectStepsOnDay(pid, iso){
+  return Object.values(items).filter(t=>t.kind==="pstep"&&!t._gone&&!t.done&&t.projectId===pid&&t.schedISO&&stepEffectiveISO(t)===iso).length;
+}
+// place each item onto the earliest upcoming day that still has room
+function scheduleItems(list, start){
+  let n=0;
+  list.forEach(item=>{
+    const who=item.who || (item.kind==="pstep" ? ((projectOf(item)||{}).who||"both") : "both");
+    const cursor=new Date(start); let guard=0;
     while(guard++<400){
       const iso=isoOf(cursor);
+      const projOK = item.kind!=="pstep" || projectStepsOnDay(item.projectId, iso) < PROJ_PER_DAY;
+      if(projOK && fitsDay(who, iso)){
+        if(item.kind==="pstep") item.schedISO=iso;
+        else { item.weekKey=weekKeyOf(new Date(iso+"T00:00:00")); item.day=weekdayOf(iso); }
+        put(item); n++; break;
+      }
       cursor.setDate(cursor.getDate()+1);
-      if(used.has(iso) || dayBlockedFor(who, iso)) continue;
-      s.schedISO=iso; used.add(iso); put(s); n++; break;
     }
   });
   return n;
+}
+function startPlanDate(){ return new Date(); }   // from today; capacity keeps today from overloading
+function autoScheduleProject(pid){
+  const steps=stepsFor(pid).filter(s=>!s.done && !s.schedISO).sort(byOrder);
+  return scheduleItems(steps, startPlanDate());
+}
+// global "plan my week" — everything unscheduled, across all inputs
+function planWeek(){
+  const steps = Object.values(items).filter(t=>t.kind==="pstep"&&!t._gone&&!t.done&&!t.schedISO).sort(byOrder);
+  const todos = masterTodos().filter(t=>!t.done);   // List to-dos with no day yet
+  return scheduleItems(steps, startPlanDate()) + scheduleItems(todos, startPlanDate());
 }
 
 /* ============================ appointments ======================== */
@@ -1013,6 +1058,7 @@ function renderList(){
         <button class="add" id="listAddBtn" aria-label="Add"><svg width="22" height="22"><use href="#i-plus"/></svg></button>
       </div>
       <div class="pmeta" style="margin-top:8px">Sorted by who, then area — tap a tag to fix a guess. Say "on Thursday" to send it straight to a day.</div>
+      <button class="bigadd" data-act="planweek" style="margin-top:10px"><svg width="18" height="18"><use href="#i-clock"/></svg> Plan my week</button>
     </div>
     ${secs || empty}`;
   wireList();
@@ -1205,6 +1251,15 @@ if(HAS_DOM){
   /* master list delegation */
   document.getElementById("listBody").addEventListener("click", e=>{
     const el=e.target.closest("[data-act]"); if(!el) return;
+    if(el.dataset.act==="planweek"){
+      const pending = masterTodos().filter(t=>!t.done).length
+        + Object.values(items).filter(t=>t.kind==="pstep"&&!t._gone&&!t.done&&!t.schedISO).length;
+      if(!pending){ showToast("Nothing left to schedule"); return; }
+      if(!confirm("Spread your "+pending+" unscheduled task"+(pending===1?"":"s")+" across the coming days? (Already-dated items are left alone.)")) return;
+      const n=planWeek(); view="week"; render();
+      showToast("Planned "+n+" onto your week");
+      return;
+    }
     const row=el.closest("[data-id]"); if(!row) return;
     const id=row.dataset.id, act=el.dataset.act;
     if(act==="todocheck"){ toggleTodo(id); render(); }
@@ -1506,7 +1561,23 @@ if(!HAS_DOM){
     const dates=[items["pstep:s1"].schedISO, items["pstep:s2"].schedISO];
     console.log("auto-schedule placed both steps:", n===2 && dates.every(Boolean));
     console.log("auto-schedule kept Lindsay off recovery days:", dates.every(d=>!dayBlockedFor("lindsay",d)));
-    delete items["shift:as"];
+    delete items["shift:as"]; delete items["proj:sch"]; delete items["pstep:s1"]; delete items["pstep:s2"];
+  })();
+
+  /* day-capacity packing: multiple per day up to capacity + per-project cap */
+  (function(){
+    items["proj:cap"]={id:"proj:cap",kind:"project",title:"Cap",who:"ben",order:0,ts:1};
+    for(let i=0;i<6;i++) items["pstep:c"+i]={id:"pstep:c"+i,kind:"pstep",projectId:"proj:cap",text:"s"+i,who:"ben",done:false,schedISO:null,order:i};
+    const n=autoScheduleProject("proj:cap");
+    const placed=Object.values(items).filter(t=>t.kind==="pstep"&&t.projectId==="proj:cap");
+    const byDay={}; placed.forEach(s=>{ byDay[s.schedISO]=(byDay[s.schedISO]||0)+1; });
+    console.log("packs multiple per day (some day has >1):", Object.values(byDay).some(c=>c>1));
+    console.log("respects per-project cap of "+PROJ_PER_DAY+":", Object.values(byDay).every(c=>c<=PROJ_PER_DAY));
+    console.log("all 6 steps placed:", n===6);
+    // capacity respects existing load
+    const iso=placed[0].schedISO;
+    console.log("personLoad counts placed steps:", personLoad("ben", iso)>=1);
+    ["proj:cap"].concat(placed.map(s=>s.id)).forEach(id=>delete items[id]);
   })();
   console.log("OK");
 }
