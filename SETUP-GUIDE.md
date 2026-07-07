@@ -130,6 +130,7 @@ Add it to the home screen so it opens full-screen with its own icon:
 - **Check things off** — tap the box. Checkmarks are tracked **per week**, so each week starts fresh while the plan itself stays put.
 - **Recurring vs one-off** — the routine, cleaning, care notes, and Lindsay's info **repeat every week** (cleaning and Lindsay's info are set per weekday); edits to them carry forward. **To-dos** are for that week, and anything you don't finish rolls into the current week automatically.
 - **Undo** — deleting shows a brief **Undo** button in case you tap by mistake.
+- **The Projects tab** — track multi-step jobs (like the stairs). Use the **Sort** menu top-right to order them by **My order** (as added), **Progress** (least-done first, finished ones drop to the bottom), **Person** (Ben / Lindsay / Both, with headings), **Name (A–Z)**, or **Recently added**. Your choice is remembered.
 - **Reset starters** — the **gear > Reload this week's starter to-dos** re-adds the original project to-dos for the week. Your own added items stay.
 - **Offline** — once opened (and hosted), the app works without signal; changes sync when you're back online.
 

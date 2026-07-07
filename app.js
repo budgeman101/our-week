@@ -173,6 +173,7 @@ let items = {};
 let household = localStorage.getItem("ow-household") || "";
 let me = localStorage.getItem("ow-me") || "";
 let view = "week";
+let projSort = localStorage.getItem("ow-projsort") || "custom";
 let currentMonday = mondayOf(new Date());
 let selDay = todayMonIndex();
 let pendWho = "ben";
@@ -975,24 +976,45 @@ function wireList(){
   input.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
 }
 
+function projectProgress(p){ const s=stepsFor(p.id); return s.length ? s.filter(x=>x.done).length/s.length : 0; }
+function projectCompare(mode){
+  switch(mode){
+    // least-done first (fully-finished sink to the bottom), then custom order
+    case "progress": return (a,b)=> projectProgress(a)-projectProgress(b) || (a.order||0)-(b.order||0);
+    case "who":      return (a,b)=> WHO_ORDER.indexOf(a.who)-WHO_ORDER.indexOf(b.who) || (a.order||0)-(b.order||0);
+    case "name":     return (a,b)=> (a.title||"Untitled").localeCompare(b.title||"Untitled", undefined, {sensitivity:"base"}) || (a.order||0)-(b.order||0);
+    case "recent":   return (a,b)=> (b.ts||0)-(a.ts||0);
+    default:         return (a,b)=> (a.order||0)-(b.order||0);   // custom / as added
+  }
+}
+function projectCardHTML(p){
+  const steps=stepsFor(p.id);
+  const done=steps.filter(s=>s.done).length;
+  const pct = steps.length ? Math.round(done/steps.length*100) : 0;
+  return `<div class="proj" data-id="${p.id}">
+    <div class="projhd">
+      <span class="ptitle" data-act="editproj">${esc(p.title||"Untitled project")}</span>
+      <button class="who ${p.who}" data-act="cycprojwho">${WHO[p.who]}</button>
+      <button class="editb" data-act="editproj" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
+    </div>
+    <div class="pbar"><span style="width:${pct}%"></span></div>
+    <div class="pmeta">${done}/${steps.length} done</div>
+    <ul class="items">${steps.map(stepRow).join("")||'<li class="emptyhint">No steps yet.</li>'}</ul>
+    <button class="addmini left" data-act="addstep" data-pid="${p.id}"><svg><use href="#i-plus"/></svg>Add step</button>
+  </div>`;
+}
 function renderProjects(){
-  const projs=projectsAll();
-  let html = projs.map(p=>{
-    const steps=stepsFor(p.id);
-    const done=steps.filter(s=>s.done).length;
-    const pct = steps.length ? Math.round(done/steps.length*100) : 0;
-    return `<div class="proj" data-id="${p.id}">
-      <div class="projhd">
-        <span class="ptitle" data-act="editproj">${esc(p.title||"Untitled project")}</span>
-        <button class="who ${p.who}" data-act="cycprojwho">${WHO[p.who]}</button>
-        <button class="editb" data-act="editproj" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
-      </div>
-      <div class="pbar"><span style="width:${pct}%"></span></div>
-      <div class="pmeta">${done}/${steps.length} done</div>
-      <ul class="items">${steps.map(stepRow).join("")||'<li class="emptyhint">No steps yet.</li>'}</ul>
-      <button class="addmini left" data-act="addstep" data-pid="${p.id}"><svg><use href="#i-plus"/></svg>Add step</button>
-    </div>`;
-  }).join("");
+  const projs=projectsAll().slice().sort(projectCompare(projSort));
+  const cnt=document.getElementById("projCount");
+  if(cnt) cnt.textContent = projs.length+" project"+(projs.length===1?"":"s");
+  const sel=document.getElementById("projSort");
+  if(sel && sel.value!==projSort) sel.value=projSort;
+
+  let html="", lastWho=null;
+  projs.forEach(p=>{
+    if(projSort==="who" && p.who!==lastWho){ html+=`<div class="grp">${WHO[p.who]||"—"}</div>`; lastWho=p.who; }
+    html+=projectCardHTML(p);
+  });
   if(!projs.length) html = `<div class="emptybig"><svg width="34" height="34"><use href="#i-folder"/></svg><p>No projects yet.<br>Add one to track a multi-step job like the stairs.</p></div>`;
   html += `<button class="bigadd" data-act="addproj"><svg width="18" height="18"><use href="#i-plus"/></svg> New project</button>`;
   document.getElementById("projectsBody").innerHTML = html;
@@ -1142,6 +1164,13 @@ if(HAS_DOM){
   });
   document.getElementById("notePost").onclick=()=>{ const i=document.getElementById("noteText"); addNote(i.value); i.value=""; };
   document.getElementById("noteText").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const i=e.target; addNote(i.value); i.value=""; } });
+
+  /* projects sort */
+  const projSortSel=document.getElementById("projSort");
+  if(projSortSel){
+    projSortSel.value=projSort;
+    projSortSel.addEventListener("change", e=>{ projSort=e.target.value; localStorage.setItem("ow-projsort", projSort); renderProjects(); });
+  }
 
   /* week nav */
   document.getElementById("prev").onclick=()=>{ currentMonday.setDate(currentMonday.getDate()-7); currentMonday=new Date(currentMonday); renderWeek(); };
@@ -1373,6 +1402,19 @@ if(!HAS_DOM){
     toggleShiftSkip("shift:reg:mon");
     console.log("un-skip restores it:", shiftsForDate(monISO).some(s=>s.id==="shift:reg:mon"));
   })();
+
+  /* project sorting */
+  items["proj:apple"]={id:"proj:apple",kind:"project",title:"Apple",who:"lindsay",order:5,ts:1};
+  items["proj:zebra"]={id:"proj:zebra",kind:"project",title:"Zebra",who:"ben",order:2,ts:9};
+  items["pstep:z1"]={id:"pstep:z1",kind:"pstep",projectId:"proj:zebra",text:"a",done:true,order:0};
+  const nm=projectsAll().slice().sort(projectCompare("name")).map(p=>p.title);
+  console.log("name sort A→Z:", nm.indexOf("Apple")<nm.indexOf("Zebra"));
+  const wh=projectsAll().slice().sort(projectCompare("who")).map(p=>p.who);
+  console.log("who sort ben before lindsay:", wh.indexOf("ben")<wh.indexOf("lindsay"));
+  const rc=projectsAll().slice().sort(projectCompare("recent")).map(p=>p.id);
+  console.log("recent sort newest first:", rc[0]==="proj:zebra");
+  const pg=projectsAll().slice().sort(projectCompare("progress")).map(p=>p.id);
+  console.log("progress sort least-done first:", pg.indexOf("proj:apple")<pg.indexOf("proj:zebra"));
   console.log("OK");
 }
 function saveLocalSafe(){ try{ saveLocal(); }catch(e){} }

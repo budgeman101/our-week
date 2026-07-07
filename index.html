@@ -174,6 +174,11 @@
   .addrow .add:active{background:var(--accent-d)}
 
   /* projects */
+  .projbar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin:12px 2px 4px}
+  .projbar-label{font-weight:700; font-size:1.02rem}
+  .sortsel{display:inline-flex; align-items:center; gap:7px; font-size:.8rem; color:var(--muted); font-weight:600}
+  .sortsel select{font:inherit; font-size:.85rem; font-weight:600; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:7px 9px; cursor:pointer; box-shadow:var(--shadow)}
+  .sortsel select:focus{outline:none; border-color:var(--accent)}
   .proj{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:13px 14px; margin:10px 0}
   .projhd{display:flex; align-items:center; gap:8px}
   .ptitle{flex:1; font-weight:700; font-size:1.02rem; cursor:pointer; word-break:break-word}
@@ -345,6 +350,18 @@
   </section>
 
   <section id="viewProjects" style="display:none">
+    <div class="projbar">
+      <span class="projbar-label" id="projCount">Projects</span>
+      <label class="sortsel">Sort
+        <select id="projSort">
+          <option value="custom">My order</option>
+          <option value="progress">Progress</option>
+          <option value="who">Person</option>
+          <option value="name">Name (A–Z)</option>
+          <option value="recent">Recently added</option>
+        </select>
+      </label>
+    </div>
     <div id="projectsBody"></div>
   </section>
 
