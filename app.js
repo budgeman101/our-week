@@ -477,9 +477,14 @@ function shiftsForDate(iso){
   return Object.values(items).filter(t=>t.kind==="shift"&&!t._gone&&apptOccursOn(t,iso))
     .sort((a,b)=>(a.start||"99:99").localeCompare(b.start||"99:99"));
 }
+// Lindsay's usual night starts, by weekday (Mon=0 … Sun=6): Mon & Tue 5:30 pm,
+// Fri 4 pm. Other days fall back to 5:30 pm. Just the Add-shift default — always
+// editable, and easy to change here if her regular nights shift.
+const SHIFT_START_BY_DAY = { 0:"17:30", 1:"17:30", 4:"16:00" };
+function defaultShiftStart(dayIdx){ return SHIFT_START_BY_DAY[dayIdx] || "17:30"; }
 function addShift(){
   const id="shift:"+Date.now()+Math.random().toString(36).slice(2,5);
-  put({ id, kind:"shift", label:"", date:selDayISO(), start:"", end:"", repeat:false });
+  put({ id, kind:"shift", label:"", date:selDayISO(), start:defaultShiftStart(selDay), end:"", repeat:false });
   openEditor(id, true);
 }
 
