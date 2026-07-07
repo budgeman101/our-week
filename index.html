@@ -118,6 +118,13 @@
   .carechip.add{cursor:pointer; border-style:dashed; color:var(--accent); font-weight:700}
   .carechip.add svg{color:var(--accent)}
 
+  .shiftrow{margin:2px 0 12px}
+  .shiftrow .lbl{font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; color:var(--lindsay); font-weight:700; margin-bottom:6px}
+  .shiftchip svg{color:var(--lindsay)}
+  .shiftchip b{color:var(--ink); font-weight:700}
+  .shiftchip .shiftlabel{color:var(--muted)}
+  .shiftchip .apptrep{font-size:.62rem; color:var(--faint); text-transform:uppercase; letter-spacing:.03em}
+
   .items{list-style:none; margin:0; padding:0}
   .item{display:flex; align-items:flex-start; gap:11px; padding:9px 2px; border-top:1px solid var(--line-soft)}
   .item:first-child{border-top:none}
@@ -406,8 +413,12 @@
       <div class="hintsm" id="edDateHint">A gentle nudge on that day — never a hard deadline. If it slips, it just drifts to today.</div>
     </div>
     <div class="eddate" id="edTimeRow" style="display:none">
-      <label>Time <input type="time" id="edTime" /></label>
+      <label><span id="edTimeLabel">Time</span> <input type="time" id="edTime" /></label>
       <button class="lnk" id="edTimeClear">clear</button>
+    </div>
+    <div class="eddate" id="edEndRow" style="display:none">
+      <label>Ends <input type="time" id="edEnd" /></label>
+      <button class="lnk" id="edEndClear">clear</button>
     </div>
     <div class="edrepeat" id="edRepeatRow" style="display:none">
       <label><input type="checkbox" id="edRepeat" /> Repeats weekly</label>

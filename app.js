@@ -49,7 +49,7 @@ const AREA_ORDER = Object.keys(AREAS);
 const AREA_RULES = [
   ["personal", /\b(nails?|toenails?|cuticles?|rosary|bio.?oil|ulike|hair.?removal|haircut)\b/],
   ["selling",  /\b(sell|listing|price|marketplace|kijiji)\b|^list\b/],
-  ["pets",     /\b(pets?|dogs?|cats?|johny|lou ?lou|vet|leash|litter)\b/],
+  ["pets",     /\b(pets?|dogs?|cats?|lou ?lou|vet|leash|litter)\b/],
   ["plants",   /\bplants?\b/],
   ["shop",     /\b(shop|dresser|workbench)\b/],
   ["laundry",  /\b(laundry|fold(ing)?|iron(ing)?|clothes)\b/],
@@ -99,32 +99,32 @@ const DAYPLAN = {
   0:{ headline:"Lindsay works tonight → solo evening, Ben walks Lou Lou.",
       energy:"Works tonight — light", furniture:"~2 hrs (afternoon)",
       cleanWho:"both", clean:"Bins out (Ben). Bathrooms deep-clean (Lindsay): shower head, fan, windows, drawers.",
-      care:[["i-child","Sam — morning play"],["i-paw","Johny — outside 3×"],["i-paw","Lou Lou — Ben walks"]] },
+      care:[["i-child","Sam — morning play"],["i-paw","Lou Lou — Ben walks"]] },
   1:{ headline:"Off a shift + works tonight → solo evening, Ben walks Lou Lou.",
       energy:"Off a shift + works tonight — lightest", furniture:"Rest / optional 1 hr",
       cleanWho:"both", clean:"Laundry deep-clean (Lindsay): wipe washer/dryer, fresh linens. Ben starts the load, she folds.",
-      care:[["i-child","Sam — cuddles + play"],["i-paw","Johny — outside 2×"],["i-paw","Lou Lou — Ben walks"]] },
+      care:[["i-child","Sam — cuddles + play"],["i-paw","Lou Lou — Ben walks"]] },
   2:{ headline:"Sleeps off the night shift → gymnastics + chairs together, then Ben's got Sam + the mornings.",
       energy:"Recovery — light", furniture:"~2 hrs once rested",
       cleanWho:"lindsay", clean:"Kitchen / Dining deep-clean (Lindsay): pantry, fridge, freezer, appliances.",
-      care:[["i-child","Sam — play + stroller loop"],["i-paw","Johny — outside 3×"],["i-paw","Lou Lou — Ben walks"],
+      care:[["i-child","Sam — play + stroller loop"],["i-paw","Lou Lou — Ben walks"],
             ["i-list","Admin — bills, appointments, calls, emails; returns/orders; plan the week (once rested)"]] },
   3:{ headline:"Furniture day (~4 hrs) → Ben takes Sam + the family walk.",
       energy:"Full day — rested", furniture:"~4 hrs (the big one)",
       cleanWho:"lindsay", clean:"Living Room deep-clean (Lindsay) — kept light, it's her big furniture day.",
-      care:[["i-child","Sam — park outing"],["i-paw","Johny — outside 3×"],["i-paw","Lou Lou — family walk"]] },
+      care:[["i-child","Sam — park outing"],["i-paw","Lou Lou — family walk"]] },
   4:{ headline:"Works tonight → solo evening, Ben walks Lou Lou.",
       energy:"Works tonight — light", furniture:"~2 hrs (afternoon)",
       cleanWho:"lindsay", clean:"Bedrooms deep-clean (Lindsay): under beds, closets, baseboards. Ben's got the sheets + under-bed.",
-      care:[["i-child","Sam — morning play"],["i-paw","Johny — outside 3×"],["i-paw","Lou Lou — Ben walks"]] },
+      care:[["i-child","Sam — morning play"],["i-paw","Lou Lou — Ben walks"]] },
   5:{ headline:"Recovers from the night shift → Ben covers, walks Lou Lou.",
       energy:"Recovery — light", furniture:"Rest / optional 1 hr",
       cleanWho:"both", clean:"Outside / Yard / Garden — Ben + family: prune plants & hedges, weed the fence line, sweep, de-pest.",
-      care:[["i-child","Sam — easy play"],["i-paw","Johny — outside 2×"],["i-paw","Lou Lou — Ben walks"]] },
+      care:[["i-child","Sam — easy play"],["i-paw","Lou Lou — Ben walks"]] },
   6:{ headline:"Church AM → family day with Lindsay + Sam.",
       energy:"Church AM — home ~1 pm", furniture:"~3 hrs (afternoon)",
       cleanWho:"both", clean:"Rest day — relax with Lindsay & Sam.",
-      care:[["i-child","Sam — church + family"],["i-paw","Johny — outside 3×"],["i-paw","Lou Lou — family walk"]] },
+      care:[["i-child","Sam — church + family"],["i-paw","Lou Lou — family walk"]] },
 };
 const ROUTINE = {
   morning:[
@@ -244,7 +244,7 @@ function connect(){
   if(unsub){ try{ unsub(); }catch(e){} unsub=null; }
   if(inboxUnsub){ try{ inboxUnsub(); }catch(e){} inboxUnsub=null; }
   colRef=null;
-  loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); autoRoll(); render();
+  loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); autoRoll(); migrateRemoveJohny(); render();
   if(CONFIGURED && household && typeof firebase!=="undefined"){
     try{
       if(!fbStarted){ firebase.initializeApp(firebaseConfig); db=firebase.firestore();
@@ -252,7 +252,7 @@ function connect(){
       colRef = db.collection("households").doc(household).collection("items");
       unsub = colRef.onSnapshot(snap=>{
         const next={}; snap.forEach(doc=> next[doc.id]=doc.data());
-        items=next; seedTodosIfNeeded(); seedTemplateIfNeeded(); autoRoll(); saveLocal(); render(); setStatus(true);
+        items=next; seedTodosIfNeeded(); seedTemplateIfNeeded(); autoRoll(); migrateRemoveJohny(); saveLocal(); render(); setStatus(true);
       }, ()=> setStatus(false));
       drainInbox();
     }catch(e){ setStatus(false); }
@@ -325,6 +325,17 @@ function autoRoll(){
     }
   });
   if(n) saveLocal();
+}
+// One-time cleanup: strip any care chip mentioning Johny from existing
+// devices/cloud (the source no longer seeds them). Runs once per household.
+function migrateRemoveJohny(){
+  if(items["meta:mig:nojohny"]) return;
+  Object.values(items).forEach(t=>{
+    if(t.kind==="tpl" && t.sec==="care" && /johny/i.test(t.text||"")){
+      if(isSeeded(t)){ t._gone=true; t.done=true; put(t); } else drop(t.id);
+    }
+  });
+  setMeta("meta:mig:nojohny"); saveLocal();
 }
 
 /* ============================= selectors ========================== */
@@ -458,6 +469,19 @@ function apptsForDate(iso){
     .sort((x,y)=>(x.time||"99:99").localeCompare(y.time||"99:99"));
 }
 function apptDone(a, iso){ return a.repeat ? !!items["adone:"+a.id+":"+weekKeyOf(new Date(iso+"T00:00:00"))] : !!a.done; }
+
+/* Lindsay's work shifts — dated (or weekly-repeating), each with a start
+   time. Kept separate from the weekly template so summer changes are just
+   adding/removing shifts, never editing the recurring plan. */
+function shiftsForDate(iso){
+  return Object.values(items).filter(t=>t.kind==="shift"&&!t._gone&&apptOccursOn(t,iso))
+    .sort((a,b)=>(a.start||"99:99").localeCompare(b.start||"99:99"));
+}
+function addShift(){
+  const id="shift:"+Date.now()+Math.random().toString(36).slice(2,5);
+  put({ id, kind:"shift", label:"", date:selDayISO(), start:"", end:"", repeat:false });
+  openEditor(id, true);
+}
 function toggleAppt(id, iso){
   const a=items[id]; if(!a) return;
   if(a.repeat){
@@ -492,6 +516,7 @@ function openEditor(id, fresh){
   const isProj = t.kind==="project";
   const isStep = t.kind==="pstep";
   const isAppt = t.kind==="appt";
+  const isShift = t.kind==="shift";
   const hasWho = t.kind==="todo" || (t.kind==="tpl" && t.check) || isProj || isAppt;
   edWho=t.who||"ben"; edIcon=t.icon||"i-paw";
   let title="Edit item";
@@ -500,22 +525,25 @@ function openEditor(id, fresh){
   else if(isProj) title="Edit project";
   else if(isStep) title="Edit step";
   else if(isAppt) title="Edit appointment";
+  else if(isShift) title="Edit shift";
   document.getElementById("edTitle").textContent=title;
-  document.getElementById("edText").value = (isProj||isAppt) ? (t.title||"") : t.text;
-  document.getElementById("edText").placeholder = isProj ? "Project name…" : (isAppt ? "Appointment…" : "Text…");
+  document.getElementById("edText").value = (isProj||isAppt) ? (t.title||"") : (isShift ? (t.label||"") : t.text);
+  document.getElementById("edText").placeholder = isProj ? "Project name…" : (isAppt ? "Appointment…" : (isShift ? "Shift name (optional) — Day, Night…" : "Text…"));
   document.getElementById("edText2").value="";
   show("edSecondWrap", false);
-  show("edSplitToggle", !isInfo && !isProj && !isAppt);
+  show("edSplitToggle", !isInfo && !isProj && !isAppt && !isShift);
   document.getElementById("edSplitToggle").innerHTML='<svg width="15" height="15"><use href="#i-split"/></svg> Split into two';
   const isTodo = t.kind==="todo";
   show("edWhoRow", hasWho);
   show("edIconRow", isCare);
-  show("edDateRow", isStep || isAppt || isTodo);
-  show("edTimeRow", isAppt);
-  show("edRepeatRow", isAppt);
+  show("edDateRow", isStep || isAppt || isTodo || isShift);
+  show("edTimeRow", isAppt || isShift);
+  show("edEndRow", isShift);
+  show("edRepeatRow", isAppt || isShift);
   show("edRemindRow", isAppt);
   show("edDelete", !isInfo);
-  document.getElementById("edDateLabel").textContent = isAppt ? "Date" : (isTodo ? "Do on" : "Remind me on");
+  document.getElementById("edTimeLabel").textContent = isShift ? "Starts" : "Time";
+  document.getElementById("edDateLabel").textContent = (isAppt||isShift) ? "Date" : (isTodo ? "Do on" : "Remind me on");
   show("edDateHint", isStep || isTodo);
   if(isStep){
     document.getElementById("edDateHint").textContent="A gentle nudge on that day — never a hard deadline. If it slips, it just drifts to today.";
@@ -530,6 +558,12 @@ function openEditor(id, fresh){
     document.getElementById("edTime").value = t.time || "";
     document.getElementById("edRepeat").checked = !!t.repeat;
     document.getElementById("edRemind").value = t.remind || "morning";
+  }
+  if(isShift){
+    document.getElementById("edDate").value = t.date || "";
+    document.getElementById("edTime").value = t.start || "";
+    document.getElementById("edEnd").value = t.end || "";
+    document.getElementById("edRepeat").checked = !!t.repeat;
   }
   if(hasWho) updateEdWho();
   if(isCare) updateEdIcon();
@@ -574,6 +608,18 @@ function createSibling(t, text2){
 function saveEditor(){
   const t=items[editingId]; if(!t){ editingFresh=false; closeEditorRaw(); return; }
   const text1=document.getElementById("edText").value.trim();
+  if(t.kind==="shift"){
+    // A shift's real content is its start time; the label is optional.
+    t.label = text1;
+    t.date  = document.getElementById("edDate").value || t.date;
+    t.start = document.getElementById("edTime").value || "";
+    t.end   = document.getElementById("edEnd").value || "";
+    t.repeat= document.getElementById("edRepeat").checked;
+    if(!t.start && !t.label && editingFresh){
+      editingFresh=false; deleteSilently(editingId); editingId=null; closeEditorRaw(); render(); return;
+    }
+    put(t); editingFresh=false; editingId=null; closeEditorRaw(); render(); return;
+  }
   if(!text1){
     if(editingFresh){ editingFresh=false; deleteSilently(editingId); editingId=null; closeEditorRaw(); render(); return; }
     document.getElementById("edText").focus(); return;
@@ -656,6 +702,13 @@ function schedStepRow(s){
 function careChip(it){
   return `<span class="carechip tap" data-id="${it.id}" data-act="edititem"><svg><use href="#${it.icon||'i-paw'}"/></svg>${careHTML(it.text)}</span>`;
 }
+function shiftChip(s){
+  const time = s.start ? fmtTime(s.start) : "time TBD";
+  const span = s.end ? "–"+fmtTime(s.end) : "";
+  const label = s.label ? ' <span class="shiftlabel">'+esc(s.label)+'</span>' : "";
+  const rep = s.repeat ? ' <span class="apptrep">weekly</span>' : "";
+  return `<span class="carechip shiftchip tap" data-id="${s.id}" data-act="editshift"><svg><use href="#i-clock"/></svg><b>${esc(time)}${esc(span)}</b>${label}${rep}</span>`;
+}
 function addMini(sec, scope, check){
   return `<button class="addmini" data-act="addtpl" data-sec="${sec}" data-scope="${scope}" data-check="${check?1:0}"><svg><use href="#i-plus"/></svg>Add</button>`;
 }
@@ -731,6 +784,7 @@ function renderWeek(){
   const care=careItems(selDay);
   const clean=tplList("clean",selDay);
   const appts=apptsForDate(selDayISO());
+  const shifts=shiftsForDate(selDayISO());
   const emptyHint=`<li class="emptyhint">Nothing here yet — tap + Add.</li>`;
   const todoInner = (todos.length||sched.length)
     ? todos.map(todoRow).join("") + sched.map(schedStepRow).join("")
@@ -751,6 +805,13 @@ function renderWeek(){
     <div class="card lindsay">
       <div class="ctitle pink"><svg><use href="#i-heart"/></svg>With Lindsay</div>
       <p class="headline tap" data-id="info:${selDay}:headline" data-act="edititem">${esc(infoText(selDay,"headline"))}</p>
+      <div class="shiftrow">
+        <div class="lbl">Shifts</div>
+        <div class="carechips">
+          ${shifts.map(shiftChip).join("")}
+          <button class="carechip add" data-act="addshift"><svg><use href="#i-plus"/></svg>Add shift</button>
+        </div>
+      </div>
       <div class="metarow">
         <div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(infoText(selDay,"energy"))}</div></div>
         <div class="meta tap" data-id="info:${selDay}:furniture" data-act="edititem"><div class="lbl">Furniture</div><div class="val">${esc(infoText(selDay,"furniture"))}</div></div>
@@ -905,7 +966,9 @@ function printWeekHTML(){
     const care=careItems(i);
     const appts=apptsForDate(iso);
     h += `<div class="pday"><div class="pdayname">${DAY_FULL[i]}, ${d.toLocaleDateString("en-US",{month:"long",day:"numeric"})}</div>`;
+    const shifts=shiftsForDate(iso);
     h += `<div class="pmeta"><b>Lindsay:</b> ${esc(infoText(i,"headline"))}</div>`;
+    if(shifts.length) h += `<div class="pmeta2">Shifts: ${shifts.map(s=>(s.start?fmtTime(s.start):"TBD")+(s.end?"–"+fmtTime(s.end):"")+(s.label?" "+s.label:"")).join(" · ")}</div>`;
     h += `<div class="pmeta2">Energy: ${esc(infoText(i,"energy"))} · Furniture: ${esc(infoText(i,"furniture"))}</div>`;
     if(care.length) h += `<div class="pmeta2">${care.map(c=>esc(c.text)).join(" · ")}</div>`;
     if(appts.length){
@@ -947,6 +1010,7 @@ if(HAS_DOM){
     if(act==="addtpl"){ const sc=el.dataset.scope; addTpl(el.dataset.sec, sc==="daily"?"daily":Number(sc), el.dataset.check==="1"); return; }
     if(act==="addcare"){ addCare(Number(el.dataset.scope)); return; }
     if(act==="addappt"){ addAppt(); return; }
+    if(act==="addshift"){ addShift(); return; }
     const row=el.closest("[data-id]"); if(!row) return;
     const id=row.dataset.id;
     if(act==="tplcheck"){ toggleTpl(id); row.classList.toggle("done"); refreshProgress(); }
@@ -955,7 +1019,7 @@ if(HAS_DOM){
     else if(act==="apptcheck"){ toggleAppt(id, selDayISO()); render(); }
     else if(act==="cycwho"){ cycleWho(id); }
     else if(act==="edititem" || act==="editbtn"){ openEditor(id); }
-    else if(act==="editstep" || act==="editappt"){ openEditor(id); }
+    else if(act==="editstep" || act==="editappt" || act==="editshift"){ openEditor(id); }
   });
 
   /* master list delegation */
@@ -1012,6 +1076,7 @@ if(HAS_DOM){
   document.getElementById("edIconBtn").onclick=()=>{ edIcon=CARE_ICONS[(CARE_ICONS.indexOf(edIcon)+1)%CARE_ICONS.length]; updateEdIcon(); };
   document.getElementById("edDateClear").onclick=()=>{ document.getElementById("edDate").value=""; };
   document.getElementById("edTimeClear").onclick=()=>{ document.getElementById("edTime").value=""; };
+  document.getElementById("edEndClear").onclick=()=>{ document.getElementById("edEnd").value=""; };
   document.getElementById("edSplitToggle").onclick=toggleSplit;
   document.getElementById("edSave").onclick=saveEditor;
   document.getElementById("edDelete").onclick=deleteFromEditor;
@@ -1089,7 +1154,7 @@ if(HAS_DOM){
     document.getElementById("welcomeCode").value = household || "ben-lindsay-2026-"+Math.random().toString(36).slice(2,6);
     welcomeId = me || "";
     paintIdPick("#welcomeId", welcomeId);
-    loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); render();
+    loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); migrateRemoveJohny(); render();
     overlayWelcome.classList.add("show");
   } else {
     pendWho=me; connect();
@@ -1120,7 +1185,7 @@ if(!HAS_DOM){
               "| routine:", all().filter(t=>t.kind==="tpl"&&["morning","night","each"].includes(t.sec)).length, "(14)");
 
   /* notes */
-  me="ben"; addNote("Gave Johny his meds");
+  me="ben"; addNote("Grabbed the mail");
   let note=notesAll()[0];
   console.log("note by ben, unseen → unread for lindsay:", (function(){ me="lindsay"; const u=unreadCount(); me="ben"; return u; })()===1);
   me="lindsay"; ackNote(note.id); me="ben";
@@ -1168,6 +1233,24 @@ if(!HAS_DOM){
   console.log("'on Thursday' schedules to a day:", !!st2.weekKey && st2.day===3 && st2.text==="Mow the lawn");
   console.log("import file shape works:", importMany([{text:"Water the plants"},"Bottle depot"])===2);
   console.log("masterTodos groups them:", masterTodos().length>=3);
+
+  /* Johny is gone from the seed */
+  console.log("no Johny in care seed:", !Object.values(items).some(t=>t.kind==="tpl"&&t.sec==="care"&&/johny/i.test(t.text||"")));
+  console.log("migration tombstones a stray Johny chip:", (function(){
+    items["care:0:9"]={id:"care:0:9",kind:"tpl",sec:"care",scope:0,text:"Johny — outside 3×",icon:"i-paw",order:9};
+    delete items["meta:mig:nojohny"]; migrateRemoveJohny();
+    return items["care:0:9"]._gone===true;
+  })());
+
+  /* shifts: dated, with start times, weekly-repeatable */
+  items["shift:1"]={id:"shift:1",kind:"shift",label:"Night",date:todayISO(),start:"15:00",end:"23:00",repeat:false};
+  console.log("shift shows on its date:", shiftsForDate(todayISO()).some(s=>s.id==="shift:1"));
+  const wd2=(new Date(todayISO()+"T00:00:00").getDay()+6)%7;
+  items["shift:2"]={id:"shift:2",kind:"shift",label:"Day",date:todayISO(),start:"07:00",end:"",repeat:true};
+  const nextWk=new Date(); nextWk.setDate(nextWk.getDate()+7);
+  console.log("weekly shift repeats next week:", shiftsForDate(isoOf(nextWk)).some(s=>s.id==="shift:2"));
+  console.log("shifts sort by start time:", shiftsForDate(todayISO())[0].id==="shift:2");
+  console.log("shift prints under Lindsay:", (function(){ selDay=todayMonIndex(); currentMonday=mondayOf(new Date()); return printWeekHTML().includes("Shifts:"); })());
   console.log("OK");
 }
 function saveLocalSafe(){ try{ saveLocal(); }catch(e){} }

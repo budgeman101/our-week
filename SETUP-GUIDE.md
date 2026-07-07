@@ -1,6 +1,6 @@
 # Our Week — Setup Guide
 
-A shared weekly **plan** for you and Lindsay. Pick a day and you see that day at a glance: what's going on with **Lindsay** (her schedule, energy, furniture hours, and Sam/Johny/Lou Lou), your **to-dos**, the day's **cleaning**, and the **every-day routine** (morning / night / each day).
+A shared weekly **plan** for you and Lindsay. Pick a day and you see that day at a glance: what's going on with **Lindsay** (her work shifts, energy, furniture hours, and Sam/Lou Lou), your **to-dos**, the day's **cleaning**, and the **every-day routine** (morning / night / each day).
 
 Everything on the day is editable, and you can add your own items anywhere. Each line is tagged **Ben**, **Lindsay**, or **Both** (Both shows in bold). Checkmarks save per week and — once synced — show up on both phones.
 
@@ -117,7 +117,8 @@ Add it to the home screen so it opens full-screen with its own icon:
 
 - **Pick a day** — tap a day along the top. Today is highlighted. Use the **arrows** to move between weeks; *Jump to this week* brings you back.
 - **The List tab** — the master household to-do list, sorted **by who, then by area** just like the paper one, automatically. Dump tasks in by typing (no sorting needed — it guesses who/area, tap a tag to fix), by voice (**SIRI-SETUP.md**), or as a whole pile at once (**DUMP-IMPORT.md**). Saying "on Thursday" sends a task straight to that day. To schedule a List item, open it and set **Do on**; clear the date to send it back to the List.
-- **Edit anything** — tap any line (or its **pencil**) to open the editor. You can reword it, change who it's for, **split it into two**, or delete it. This works for your to-dos, the cleaning step, the morning/night/each-day routine, the Sam/Johny/Lou Lou notes, and even Lindsay's schedule, energy, and furniture lines.
+- **Edit anything** — tap any line (or its **pencil**) to open the editor. You can reword it, change who it's for, **split it into two**, or delete it. This works for your to-dos, the cleaning step, the morning/night/each-day routine, the Sam/Lou Lou notes, and even Lindsay's schedule, energy, and furniture lines.
+- **Lindsay's shifts** — on her card, tap **+ Add shift** to drop in a shift with a **start time** (and an optional end time and label like *Day* or *Night*). Shifts sit on a specific day, so summer's shifting schedule is just adding and removing them. If a shift is the same every week, tick **Repeats weekly** in its editor. Tap any shift to change or delete it.
 - **Add your own** — tap **+ Add** in any section: a care note on Lindsay's card, a cleaning step, a morning/night/each-day routine item, or a to-do (type it in the box, pick who, tap the plus).
 - **Split into two** — in the editor, tap **Split into two**. It suggests a sensible break point; both halves become separate items on the same day.
 - **Who** — tap the colored **Ben / Lindsay / Both** chip to change who an item is for. Both items show in **bold**.
