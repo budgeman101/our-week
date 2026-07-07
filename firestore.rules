@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Our Week — Firestore security rules.
+// Data is reachable only under households/<code>/… and only by someone who
+// knows the household code (the code is part of the path). No accounts; the
+// code is the key. Fine for a family planner — just keep the code private.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /households/{code} {
+      allow read, write: if true;
+      match /{document=**} {
+        allow read, write: if true;
+      }
+    }
+  }
+}

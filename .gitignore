@@ -10,3 +10,8 @@ reminders/node_modules/
 reminders/secrets.local.txt
 reminders/.env
 reminders/package-lock.json
+
+# Firebase CLI cruft
+.firebase/
+firebase-debug.log
+*-debug.log

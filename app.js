@@ -16,12 +16,12 @@ if (typeof localStorage === "undefined") {           // node/test shim
  *  Full walkthrough in SETUP-GUIDE.md.
  * ------------------------------------------------------------------ */
 const firebaseConfig = {
-  apiKey: "PASTE_API_KEY_HERE",
-  authDomain: "PASTE_PROJECT.firebaseapp.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE_PROJECT.appspot.com",
-  messagingSenderId: "PASTE_SENDER_ID",
-  appId: "PASTE_APP_ID"
+  apiKey: "AIzaSyDOGNa93lAi7lLzt_wpQl26QFQfWysIyvs",
+  authDomain: "our-week-bl-55477.firebaseapp.com",
+  projectId: "our-week-bl-55477",
+  storageBucket: "our-week-bl-55477.firebasestorage.app",
+  messagingSenderId: "579975197541",
+  appId: "1:579975197541:web:27e82873afb327da48a78c"
 };
 const CONFIGURED = !String(firebaseConfig.apiKey).startsWith("PASTE_");
 
