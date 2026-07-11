@@ -102,7 +102,7 @@ To share one plan, both phones must use the **same household code**.
 
 1. On **your** phone, open the link. At the welcome card, type the code you both agreed on. Tap **Start**.
 2. On **Lindsay's** phone, open the same link and type the **exact same code**. Tap **Start**.
-3. Done — you now share one live plan. (Change the code anytime via the **gear**, top right.)
+3. Done — you now share one live plan. (Change the code anytime via the **gear**, top right — when you save a new code it offers to **bring your whole plan along**, and this phone's reminders follow automatically. Do it on each phone.)
 
 ### Part H — Make it feel like a real app (optional)
 
@@ -118,7 +118,7 @@ Add it to the home screen so it opens full-screen with its own icon:
 - **Pick a day** — tap a day along the top. Today is highlighted. Use the **arrows** to move between weeks; *Jump to this week* brings you back.
 - **The List tab** — the master household to-do list, sorted **by who, then by area** just like the paper one, automatically. Dump tasks in by typing (no sorting needed — it guesses who/area, tap a tag to fix), by voice (**SIRI-SETUP.md**), or as a whole pile at once (**DUMP-IMPORT.md**). Saying "on Thursday" sends a task straight to that day. To schedule a List item, open it and set **Do on**; clear the date to send it back to the List.
 - **Switching to Our Kitchen** — the **Kitchen** button sits in the purple header, right next to the app name. Tap it and the screen becomes the **full Our Kitchen app** (the complete original: Shopping, Pantry, Meals, Recipes, receipt scanning, staples, insights — everything). A matching **Week** button in *its* header brings you back. Same install, same address — two apps, one roof. One thing to know:
-  - Kitchen keeps its **own household code** (separate from the planner's). The first time each phone opens it at the new address, type your kitchen code at its welcome card — same one you used before — and it picks up right where it left off, list and pantry intact.
+  - Kitchen has its **own household code** entry (you can use the same code as the planner or a different one). The first time each phone opens it, type your kitchen code at its welcome card and it picks up right where it left off, list and pantry intact. Keep the code private — it's the only key to your data.
 - **Edit anything** — tap any line (or its **pencil**) to open the editor. You can reword it, change who it's for, **split it into two**, or delete it. This works for your to-dos, the cleaning step, the morning/night/each-day routine, the Sam/Lou Lou notes, and even Lindsay's schedule, energy, and furniture lines.
 - **Lindsay's shifts** — her regular nights are already in every week: **Mon & Tue 5:30 PM, Fri 4:00 PM**. You only touch them when summer changes things:
   - **One-off change** (extra shift, or a different night) — tap **+ Add shift**. It pre-fills her usual start for that day (Mon/Tue 5:30, Fri 4:00, else 5:30); adjust the time, and optionally an end time (fine to run past midnight, e.g. 12:30 AM or 2:30 AM).

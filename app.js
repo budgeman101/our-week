@@ -1489,8 +1489,20 @@ if(HAS_DOM){
   document.getElementById("setClose").onclick=()=>overlaySettings.classList.remove("show");
   document.getElementById("setSave").onclick=()=>{
     const v=document.getElementById("setCode").value.trim(); if(!v) return;
+    // Changing to a new code? Keep a copy of the plan so it can move along.
+    const prevCode=household;
+    const prev = (prevCode && v!==prevCode) ? Object.assign({}, items) : null;
     household=v; localStorage.setItem("ow-household",household);
     overlaySettings.classList.remove("show"); connect();
+    if(prev && Object.keys(prev).length &&
+       confirm("Bring your plan's data over to this new code? (OK = everything moves with you. Do this on each phone — it's safe to repeat.)")){
+      Object.values(prev).forEach(d=>put(d));
+      if(reminderState()==="on") enableReminders();   // re-point this phone's reminders
+      showToast("Moved your plan to the new code");
+      render();
+    } else if(prev && reminderState()==="on"){
+      enableReminders();   // even without moving data, reminders follow the code
+    }
   };
   document.getElementById("setReseed").onclick=()=>{
     if(confirm("Re-add this week's starter to-dos? (Your own added items stay.)")){
