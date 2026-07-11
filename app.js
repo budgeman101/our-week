@@ -1,7 +1,8 @@
 /* ================================================================== *
  *  Our Week — shared plan, projects & handoff notes for Ben & Lindsay.
- *  Three views: Week (daily plan), Projects, Notes (shared board).
- *  Everything on the day view is editable, addable, and syncs.
+ *  Views: Week (daily plan), List, Kitchen (shopping + pantry, moved
+ *  in from the old Our Kitchen app), Projects, Notes (shared board).
+ *  Everything is editable, addable, and syncs per household code.
  * ================================================================== */
 
 const HAS_DOM = typeof document !== "undefined";
@@ -269,10 +270,11 @@ function connect(){
       unsub = colRef.onSnapshot(snap=>{
         const next={}; snap.forEach(doc=> next[doc.id]=doc.data());
         items=next; seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); autoRoll(); migrateRemoveJohny(); saveLocal(); render(); setStatus(true);
+        migrateKitchenIfNeeded();
       }, ()=> setStatus(false));
       drainInbox();
     }catch(e){ setStatus(false); }
-  } else { setStatus(false); }
+  } else { setStatus(false); migrateKitchenIfNeeded(); }
 }
 
 /* Siri (and remote dumps) drop raw docs into households/<code>/inbox —
@@ -736,6 +738,363 @@ function comingUp(){
   return list;
 }
 
+/* ==================== kitchen: shopping + pantry ==================== *
+ *  Moved in from the old "Our Kitchen" app. Shopping list (grouped by
+ *  store, then aisle in your walk order) + pantry with a restock loop:
+ *  checking an item off drops it into the pantry; a pantry item running
+ *  low (≤ ~10% of full) auto-returns to the list. Data lives as per-item
+ *  docs (kinds: gitem/pantry/gdef/gstore/gorder/kset) in the same synced
+ *  household, so it shares offline + live sync with everything else.
+ * ------------------------------------------------------------------ */
+// Where the old app's data lives — read once per household, then done.
+// (The old key is a public client key; the household code is the secret.)
+const KITCHEN_LEGACY = {
+  projectId: "our-kitchen-be03f",
+  apiKey: "AIzaSyCSIqtnvJ1459lWFRvpFTQ6NDQaIZ2kkp4",
+  household: "1",
+};
+const KITCHEN_MIG = "meta:kitchen:v1";
+
+/* aisles — the old app's set plus the extra ones its data actually used */
+const KCATS = [
+  ["produce","Produce"], ["dairy","Dairy & Eggs"], ["meat","Meat"], ["seafood","Seafood"],
+  ["bakery","Bakery"], ["baking","Baking"], ["cereal","Cereal & Breakfast"], ["grains","Grains"],
+  ["sauces","Sauces"], ["frozen","Frozen"], ["pantry","Pantry"], ["beverages","Beverages"],
+  ["snacks","Snacks"], ["household","Household"], ["other","Other"],
+];
+const KCAT_IDS = KCATS.map(c=>c[0]);
+const KCAT_NAME = Object.fromEntries(KCATS.map(c=>[c[0],c[1]]));
+const KUNITS = [
+  ["each",1],["pieces",1],["g",50],["kg",0.5],["ml",100],["L",0.5],
+  ["pack",1],["bag",1],["box",1],["can",1],["bottle",1],["bunch",1],["dozen",1],
+];
+const KUNIT_STEP = Object.fromEntries(KUNITS);
+const KUNIT_FAMILY = { g:"mass", kg:"mass", ml:"vol", L:"vol" };
+const KUNIT_TOBASE = { g:1, kg:1000, ml:1, L:1000 };
+
+/* common item → aisle, so first-time adds land in the right group */
+const COMMON_AISLES = {
+  apple:"produce", banana:"produce", tomato:"produce", onion:"produce", potato:"produce", carrot:"produce",
+  lettuce:"produce", spinach:"produce", broccoli:"produce", cauliflower:"produce", cucumber:"produce",
+  pepper:"produce", garlic:"produce", lemon:"produce", lime:"produce", avocado:"produce",
+  mushroom:"produce", celery:"produce", cabbage:"produce", zucchini:"produce", kale:"produce",
+  parsley:"produce", cilantro:"produce", ginger:"produce", grape:"produce", strawberry:"produce",
+  blueberry:"produce", raspberry:"produce", orange:"produce", berries:"produce", salad:"produce", mango:"produce",
+  milk:"dairy", egg:"dairy", butter:"dairy", cheese:"dairy", yogurt:"dairy", cream:"dairy", margarine:"dairy",
+  chicken:"meat", beef:"meat", pork:"meat", bacon:"meat", sausage:"meat", mince:"meat", turkey:"meat",
+  ham:"meat", steak:"meat", lamb:"meat", "hot dog":"meat", "hot dogs":"meat",
+  salmon:"seafood", tuna:"seafood", fish:"seafood", shrimp:"seafood", prawn:"seafood",
+  bread:"bakery", bagel:"bakery", baguette:"bakery", croissant:"bakery", tortilla:"bakery", bun:"bakery",
+  roll:"bakery", muffin:"bakery", pita:"bakery", naan:"bakery",
+  flour:"baking", sugar:"baking", "baking powder":"baking", "baking soda":"baking", yeast:"baking",
+  cereal:"cereal", oat:"cereal", oatmeal:"cereal", granola:"cereal",
+  rice:"grains", pasta:"grains", spaghetti:"grains", noodle:"grains", quinoa:"grains",
+  ketchup:"sauces", mustard:"sauces", mayo:"sauces", mayonnaise:"sauces", "soy sauce":"sauces", sauce:"sauces",
+  "ice cream":"frozen", fries:"frozen", pierogies:"frozen",
+  salt:"pantry", oil:"pantry", vinegar:"pantry", bean:"pantry", lentil:"pantry", chickpea:"pantry",
+  honey:"pantry", jam:"pantry", stock:"pantry", broth:"pantry", "peanut butter":"pantry", spice:"pantry",
+  water:"beverages", juice:"beverages", soda:"beverages", cola:"beverages", beer:"beverages", wine:"beverages",
+  coffee:"beverages", tea:"beverages",
+  chip:"snacks", cracker:"snacks", cookie:"snacks", biscuit:"snacks", chocolate:"snacks",
+  candy:"snacks", popcorn:"snacks", pretzel:"snacks", nut:"snacks",
+  "toilet paper":"household", "paper towel":"household", "dish soap":"household", detergent:"household",
+  soap:"household", shampoo:"household", toothpaste:"household", sponge:"household", "trash bag":"household",
+  foil:"household", napkin:"household", tissue:"household",
+};
+function singulars(w){
+  const out=[w];
+  if(/ies$/.test(w)) out.push(w.replace(/ies$/,"y"));
+  if(/es$/.test(w)) out.push(w.replace(/es$/,""));
+  if(/s$/.test(w)) out.push(w.replace(/s$/,""));
+  return out;
+}
+function guessKCat(name){
+  const n=String(name||"").trim().toLowerCase();
+  if(!n) return null;
+  for(const c of singulars(n)){ if(COMMON_AISLES[c]) return COMMON_AISLES[c]; }
+  const toks=n.split(/\s+/);
+  for(let i=toks.length-1;i>=0;i--){
+    for(const c of singulars(toks[i])){ if(COMMON_AISLES[c]) return COMMON_AISLES[c]; }
+  }
+  return null;
+}
+
+/* small numeric + unit helpers */
+function kround(n){ return Math.round((n+Number.EPSILON)*1000)/1000; }
+function unitStep(u){ return KUNIT_STEP[u||"each"]||1; }
+function isCountUnit(u){ return !KUNIT_FAMILY[u||"each"]; }
+function fmtQty(amt,unit){
+  unit=unit||"each";
+  amt=Math.round(((+amt)||0)*100)/100;
+  return unit==="each" ? String(amt) : amt+" "+unit;
+}
+function convertAmount(amt,from,to){
+  from=from||"each"; to=to||"each";
+  if(from===to) return amt;
+  const ff=KUNIT_FAMILY[from], tf=KUNIT_FAMILY[to];
+  if(ff && ff===tf) return amt*KUNIT_TOBASE[from]/KUNIT_TOBASE[to];
+  return null;
+}
+function slugK(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"any"; }
+function kid(pre){ return pre+":"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+/* selectors */
+function kShopAll(){ return Object.values(items).filter(t=>t.kind==="gitem"&&!t._gone); }
+function kPantryAll(){ return Object.values(items).filter(t=>t.kind==="pantry"&&!t._gone); }
+function kCartItems(){ return kShopAll().filter(i=>i.checked); }
+function gdefFor(name){ const d=items["gdef:"+slugK(name)]; return (d&&!d._gone)?d:null; }
+function kStores(){
+  return Object.values(items).filter(t=>t.kind==="gstore"&&!t._gone)
+    .sort(byOrder).map(s=>s.name);
+}
+function aisleOrderFor(store){
+  const g=items["gorder:"+slugK(store||"any")];
+  const saved=(g && !g._gone && Array.isArray(g.order)) ? g.order.filter(c=>KCAT_IDS.includes(c)) : [];
+  return saved.concat(KCAT_IDS.filter(c=>!saved.includes(c)));
+}
+// kitchen settings doc (one per household); defaults mirror the old app
+function kset(){ return items["kset:main"] || {autoRestock:true, autoList:true, autoListPct:0.10}; }
+
+/* the "running low" line: ≤ pct of a full one left (min one whole unit) */
+function lowThreshold(p){
+  const full=(+p.full)||0;
+  if(full<=0) return 0;
+  const pct=(kset().autoListPct>0 ? kset().autoListPct : 0.10);
+  let thr=full*pct;
+  if(isCountUnit(p.unit) && full>1) thr=Math.max(thr,1);
+  return thr;
+}
+function almostGone(p){ const t=lowThreshold(p); return t>0 && ((+p.qty)||0)<=t+1e-9; }
+function kIsLow(p){ return !!(p.low || (p.lowAt>0 && ((+p.qty)||0)<=p.lowAt) || (kset().autoList!==false && almostGone(p))); }
+function onShoppingList(name){
+  const n=String(name||"").toLowerCase();
+  return kShopAll().some(i=>!i.checked && i.name.toLowerCase()===n);
+}
+function pctOf(p){
+  const full=(+p.full)||0; if(full<=0) return null;
+  return Math.round(((+p.qty)||0)/full*100);
+}
+function pctClass(pc){ return pc<=20?"p-lo":(pc<=50?"p-mid":"p-hi"); }
+// enough to top the item back up to full — at least one buy-unit
+function refillFor(p){
+  const full=(+p.full)||0, step=unitStep(p.unit);
+  let r=kround(full-((+p.qty)||0));
+  if(!(r>0) || r<step) r=step;
+  return r;
+}
+
+/* mutators */
+function rememberItem(name,store,cat,unit){
+  const key=String(name||"").trim().toLowerCase(); if(!key) return;
+  put({ id:"gdef:"+slugK(key), kind:"gdef", key, name:String(name).trim(), store:store||"", cat:cat||"other", unit:unit||"each" });
+}
+// merge into the active list: same name+store+unit bumps qty, else a new row
+function addToShopping(name,qty,cat,unit,opts){
+  unit=unit||"each";
+  const store=(opts && opts.store!=null) ? opts.store : (gdefFor(name) ? gdefFor(name).store||"" : "");
+  const ex=kShopAll().find(i=>!i.checked && i.name.toLowerCase()===String(name).toLowerCase()
+    && (i.store||"")===store && (i.unit||"each")===unit);
+  if(ex){ ex.qty=kround(((+ex.qty)||0)+qty); if(opts&&opts.auto) ex.auto=true; put(ex); return ex; }
+  const doc={ id:kid("gitem"), kind:"gitem", name:String(name).trim(), qty, cat:cat||"other", store, unit, checked:false };
+  if(opts&&opts.auto) doc.auto=true;
+  put(doc); return doc;
+}
+// the add bar: remembered store/aisle/unit for known items, else a guess
+function addGrocery(text){
+  text=String(text||"").trim(); if(!text) return null;
+  const d=gdefFor(text);
+  const cat=d ? d.cat : (guessKCat(text)||"other");
+  const unit=d ? (d.unit||"each") : "each";
+  const store=d ? (d.store||"") : "";
+  const doc=addToShopping(text, unitStep(unit), cat, unit, {store});
+  if(!d) rememberItem(text, store, cat, unit);
+  return doc;
+}
+function addPantryItem(text){
+  text=String(text||"").trim(); if(!text) return null;
+  const d=gdefFor(text);
+  const cat=d ? d.cat : (guessKCat(text)||"other");
+  const unit=d ? (d.unit||"each") : "each";
+  const ex=kPantryAll().find(p=>p.name.toLowerCase()===text.toLowerCase());
+  if(ex) return ex;
+  const doc={ id:kid("pit"), kind:"pantry", name:text, qty:unitStep(unit), full:unitStep(unit), cat, unit, low:false };
+  put(doc); return doc;
+}
+// add (or remove, with negative delta) pantry stock by item name
+function addPantryStock(name,delta,unit,cat){
+  unit=unit||"each";
+  let p=kPantryAll().find(i=>i.name.toLowerCase()===String(name).toLowerCase());
+  if(!p){
+    if(delta<=0) return;
+    p={ id:kid("pit"), kind:"pantry", name:String(name).trim(), qty:0, full:0, cat:cat||"other", unit, low:false };
+  }
+  let conv=convertAmount(delta, unit, p.unit||"each");
+  if(conv==null) conv=delta;                       // incompatible units → best-effort add
+  p.qty=kround(Math.max(0,((+p.qty)||0)+conv));
+  if(delta>0){
+    p.low=false;
+    p.full=Math.max((+p.full)||0, p.qty);
+    if(!almostGone(p)) p.autoListed=false;         // restocked → re-arm the auto-list
+  }
+  put(p);
+}
+// checking an item = it's in the cart → count it into the pantry right away
+// (unchecking reverses it, so mis-taps stay harmless)
+function kToggleCheck(id){
+  const it=items[id]; if(!it) return;
+  it.checked=!it.checked;
+  if(kset().autoRestock!==false){
+    if(it.checked && !it.restocked){ addPantryStock(it.name, (+it.qty)||1, it.unit||"each", it.cat); it.restocked=true; }
+    else if(!it.checked && it.restocked){ addPantryStock(it.name, -((+it.qty)||1), it.unit||"each", it.cat); it.restocked=false; }
+  }
+  put(it);
+  if(!it.checked) sweepAutoList();
+  render();
+}
+// pantry items that just crossed the low line go back on the list — once each
+function sweepAutoList(){
+  if(kset().autoList===false) return 0;
+  let added=0;
+  kPantryAll().forEach(p=>{
+    const gone=almostGone(p);
+    if(gone && !p.autoListed){
+      p.autoListed=true;
+      if(!onShoppingList(p.name)){ addToShopping(p.name, refillFor(p), p.cat, p.unit||"each", {auto:true}); added++; }
+      put(p);
+    } else if(!gone && p.autoListed){
+      p.autoListed=false; put(p);
+    }
+  });
+  return added;
+}
+function kStepQty(id,dir){
+  const it=items[id]; if(!it) return;
+  const step=unitStep(it.unit);
+  const min=it.kind==="gitem" ? step : 0;
+  it.qty=kround(Math.max(min, ((+it.qty)||0)+dir*step));
+  if(it.kind==="pantry" && dir>0){
+    it.low=false;
+    it.full=Math.max((+it.full)||0, it.qty);
+    if(!almostGone(it)) it.autoListed=false;
+  }
+  put(it);
+  if(it.kind==="pantry" && dir<0){
+    const n=sweepAutoList();
+    if(n) showToast("Running low — added "+n+" to the list");
+  }
+  render();
+}
+function pantryToList(id){
+  const p=items[id]; if(!p) return;
+  addToShopping(p.name, refillFor(p), p.cat, p.unit||"each");
+  showToast("Added "+p.name+" to the list");
+  render();
+}
+function toggleLowFlag(id){
+  const p=items[id]; if(!p) return;
+  p.low=!p.low; put(p); render();
+}
+function clearCart(){
+  const done=kCartItems();
+  if(!done.length) return;
+  lastDeleted={ multi: done.map(d=>JSON.parse(JSON.stringify(d))) };
+  done.forEach(d=>drop(d.id));
+  showToast("Cart cleared — "+done.length+" put away");
+  render();
+}
+function addStoreNamed(name){
+  name=String(name||"").trim(); if(!name) return null;
+  const ex=kStores().find(s=>s.toLowerCase()===name.toLowerCase());
+  if(ex) return ex;
+  put({ id:"gstore:"+slugK(name), kind:"gstore", name, order:kStores().length });
+  return name;
+}
+
+/* ---- one-time move-in from the old Our Kitchen app ----
+   Reads the old household doc straight from its Firebase (REST), converts
+   the arrays into per-item docs, and writes them through put() so they
+   sync everywhere. Deterministic ids make it safe if both phones race. */
+function fsVal(v){
+  if(v==null || typeof v!=="object") return v;
+  if(v.stringValue!==undefined) return v.stringValue;
+  if(v.integerValue!==undefined) return Number(v.integerValue);
+  if(v.doubleValue!==undefined) return v.doubleValue;
+  if(v.booleanValue!==undefined) return v.booleanValue;
+  if(v.nullValue!==undefined) return null;
+  if(v.arrayValue) return (v.arrayValue.values||[]).map(fsVal);
+  if(v.mapValue){
+    const o={}; const f=v.mapValue.fields||{};
+    Object.keys(f).forEach(k=>{ o[k]=fsVal(f[k]); });
+    return o;
+  }
+  return v;
+}
+function normKUnit(u){ u=String(u||"each"); return u==="ea" ? "each" : u; }
+function normKCat(c){ return KCAT_IDS.includes(c) ? c : "other"; }
+// pure: old whole-doc state → new per-item docs (tested in the node suite)
+function convertKitchen(d){
+  d=d||{};
+  const docs=[];
+  const liveArr=a=>(Array.isArray(a)?a:[]).filter(x=>x && !x.deleted);
+  liveArr(d.shopping).forEach(it=>{
+    const doc={ id:"gitem:"+it.id, kind:"gitem", name:it.name, qty:(+it.qty)||1,
+      unit:normKUnit(it.unit), cat:normKCat(it.cat), store:it.store||"", checked:!!it.checked };
+    if(it.auto) doc.auto=true;
+    if(it.restocked) doc.restocked=true;
+    docs.push(doc);
+  });
+  liveArr(d.pantry).forEach(it=>{
+    const qty=(+it.qty)||0;
+    const doc={ id:"pit:"+it.id, kind:"pantry", name:it.name, qty,
+      full:Math.max((+it.full)||0, qty), unit:normKUnit(it.unit), cat:normKCat(it.cat), low:!!it.low };
+    if(it.lowAt>0) doc.lowAt=+it.lowAt;
+    if(it.autoListed) doc.autoListed=true;
+    docs.push(doc);
+  });
+  (Array.isArray(d.stores)?d.stores:[]).forEach((s,i)=>{
+    if(typeof s==="string" && s) docs.push({ id:"gstore:"+slugK(s), kind:"gstore", name:s, order:i });
+  });
+  const sao=d.storeAisleOrder||{};
+  Object.keys(sao).forEach(store=>{
+    const e=sao[store];
+    if(!e || e.deleted || !Array.isArray(e.order)) return;
+    docs.push({ id:"gorder:"+slugK(store||"any"), kind:"gorder", store:store||"",
+      order:e.order.filter(c=>KCAT_IDS.includes(c)) });
+  });
+  const defs=d.itemDefaults||{};
+  Object.keys(defs).forEach(k=>{
+    const e=defs[k];
+    if(!e || e.deleted || !e.name) return;
+    docs.push({ id:"gdef:"+slugK(k), kind:"gdef", key:k, name:e.name, store:e.store||"",
+      cat:normKCat(e.cat), unit:normKUnit(e.unit) });
+  });
+  docs.push({ id:"kset:main", kind:"kset", autoRestock:d.autoRestock!==false,
+    autoList:d.autoList!==false, autoListPct:(d.autoListPct>0 ? d.autoListPct : 0.10) });
+  return docs;
+}
+let kitchenMigrating=false;
+async function migrateKitchenIfNeeded(){
+  if(!HAS_DOM || kitchenMigrating || !household || items[KITCHEN_MIG]) return;
+  kitchenMigrating=true;
+  try{
+    const url="https://firestore.googleapis.com/v1/projects/"+KITCHEN_LEGACY.projectId
+      +"/databases/(default)/documents/households/"+encodeURIComponent(KITCHEN_LEGACY.household)
+      +"?key="+KITCHEN_LEGACY.apiKey;
+    const res=await fetch(url);
+    if(!res.ok) throw new Error("kitchen fetch "+res.status);
+    const raw=await res.json();
+    const data={}; const f=raw.fields||{};
+    Object.keys(f).forEach(k=>{ data[k]=fsVal(f[k]); });
+    const docs=convertKitchen(data);
+    docs.forEach(put);
+    setMeta(KITCHEN_MIG); saveLocal(); render();
+    const nS=docs.filter(x=>x.kind==="gitem").length;
+    const nP=docs.filter(x=>x.kind==="pantry").length;
+    showToast("Kitchen moved in — "+nS+" list + "+nP+" pantry items");
+  }catch(e){ console.warn("kitchen move-in will retry:", e); }
+  finally{ kitchenMigrating=false; }
+}
+
 /* ============================== editor ============================ */
 function labelForInfo(f){ return f==="headline"?"Edit Lindsay's day":(f==="energy"?"Edit energy":(f==="furniture"?"Edit furniture":"Edit")); }
 function updateEdWho(){ const b=document.getElementById("edWhoBtn"); b.className="who cyc "+edWho; b.textContent=WHO[edWho]; }
@@ -751,6 +1110,8 @@ function openEditor(id, fresh){
   const isStep = t.kind==="pstep";
   const isAppt = t.kind==="appt";
   const isShift = t.kind==="shift";
+  const isGro = t.kind==="gitem";
+  const isPan = t.kind==="pantry";
   const hasWho = t.kind==="todo" || (t.kind==="tpl" && t.check) || isProj || isAppt || isStep;
   edWho=t.who||"ben"; edWhoStart=edWho; edIcon=t.icon||"i-paw";
   let title="Edit item";
@@ -760,12 +1121,30 @@ function openEditor(id, fresh){
   else if(isStep) title="Edit step";
   else if(isAppt) title="Edit appointment";
   else if(isShift) title="Edit shift";
+  else if(isGro) title="Edit grocery";
+  else if(isPan) title="Edit pantry item";
   document.getElementById("edTitle").textContent=title;
-  document.getElementById("edText").value = (isProj||isAppt) ? (t.title||"") : (isShift ? (t.label||"") : t.text);
-  document.getElementById("edText").placeholder = isProj ? "Project name…" : (isAppt ? "Appointment…" : (isShift ? "Shift name (optional) — Day, Night…" : "Text…"));
+  document.getElementById("edText").value = (isProj||isAppt) ? (t.title||"") : (isShift ? (t.label||"") : ((isGro||isPan) ? (t.name||"") : t.text));
+  document.getElementById("edText").placeholder = isProj ? "Project name…" : (isAppt ? "Appointment…" : (isShift ? "Shift name (optional) — Day, Night…" : ((isGro||isPan) ? "Item…" : "Text…")));
   document.getElementById("edText2").value="";
   show("edSecondWrap", false);
-  show("edSplitToggle", !isInfo && !isProj && !isAppt && !isShift);
+  show("edSplitToggle", !isInfo && !isProj && !isAppt && !isShift && !isGro && !isPan);
+  show("edQtyRow", isGro||isPan);
+  show("edFullRow", isPan);
+  show("edCatRow", isGro||isPan);
+  show("edStoreRow", isGro);
+  if(isGro||isPan){
+    document.getElementById("edQty").value=(+t.qty)||0;
+    document.getElementById("edUnit").innerHTML=KUNITS.map(u=>`<option value="${u[0]}"${(t.unit||"each")===u[0]?" selected":""}>${u[0]}</option>`).join("");
+    document.getElementById("edCat").innerHTML=KCATS.map(c=>`<option value="${c[0]}"${(t.cat||"other")===c[0]?" selected":""}>${c[1]}</option>`).join("");
+  }
+  if(isPan) document.getElementById("edFull").value=(+t.full)||"";
+  if(isGro){
+    const opts=['<option value="">Any store</option>']
+      .concat(kStores().map(s=>`<option value="${esc(s)}"${(t.store||"")===s?" selected":""}>${esc(s)}</option>`));
+    opts.push('<option value="__new__">＋ New store…</option>');
+    document.getElementById("edStore").innerHTML=opts.join("");
+  }
   document.getElementById("edSplitToggle").innerHTML='<svg width="15" height="15"><use href="#i-split"/></svg> Split into two';
   const isTodo = t.kind==="todo";
   show("edWhoRow", hasWho);
@@ -864,6 +1243,28 @@ function saveEditor(){
       editingFresh=false; deleteSilently(editingId); editingId=null; closeEditorRaw(); render(); return;
     }
     put(t); editingFresh=false; editingId=null; closeEditorRaw(); render(); return;
+  }
+  if(t.kind==="gitem" || t.kind==="pantry"){
+    if(!text1){
+      if(editingFresh){ editingFresh=false; deleteSilently(editingId); editingId=null; closeEditorRaw(); render(); return; }
+      document.getElementById("edText").focus(); return;
+    }
+    t.name=text1;
+    t.qty=Math.max(0, parseFloat(document.getElementById("edQty").value)||0);
+    t.unit=document.getElementById("edUnit").value||"each";
+    t.cat=document.getElementById("edCat").value||"other";
+    if(t.kind==="gitem"){
+      const sv=document.getElementById("edStore").value;
+      if(sv!=="__new__") t.store=sv;
+      rememberItem(t.name, t.store||"", t.cat, t.unit);
+    } else {
+      const f=parseFloat(document.getElementById("edFull").value)||0;
+      t.full = f>0 ? f : Math.max((+t.full)||0, t.qty);
+      if(!almostGone(t)) t.autoListed=false;
+    }
+    put(t);
+    if(t.kind==="pantry"){ const n=sweepAutoList(); if(n) showToast("Running low — added "+n+" to the list"); }
+    editingFresh=false; editingId=null; closeEditorRaw(); render(); return;
   }
   if(!text1){
     if(editingFresh){ editingFresh=false; deleteSilently(editingId); editingId=null; closeEditorRaw(); render(); return; }
@@ -1018,10 +1419,12 @@ function render(){
   updateTabs();
   show("viewWeek", view==="week");
   show("viewList", view==="list");
+  show("viewKitchen", view==="kitchen");
   show("viewProjects", view==="projects");
   show("viewNotes", view==="notes");
   if(view==="week") renderWeek();
   else if(view==="list") renderList();
+  else if(view==="kitchen") renderKitchen();
   else if(view==="projects") renderProjects();
   else renderNotes();
 }
@@ -1035,6 +1438,10 @@ function updateTabs(){
   const ln=masterTodos().filter(t=>!t.done).length;
   lb.textContent = ln? String(ln) : "";
   lb.style.display = ln? "" : "none";
+  const kb=document.getElementById("kitchenBadge");
+  const kn=kShopAll().filter(i=>!i.checked).length;
+  kb.textContent = kn? String(kn) : "";
+  kb.style.display = kn? "" : "none";
 }
 
 function renderWeek(){
@@ -1254,6 +1661,91 @@ function renderNotes(){
   document.getElementById("notesBody").innerHTML = html;
 }
 
+/* ------------------------- kitchen views ------------------------- */
+let kview="shop";
+function kAddCard(which){
+  const iid = which==="shop" ? "kaddText" : "kaddPantry";
+  const ph  = which==="shop" ? "Add to the list — milk, dish soap…" : "Add something you have at home…";
+  const hint = which==="shop"
+    ? "Known items remember their store & aisle. Checking one off counts it into your pantry."
+    : "Tap − as you use things up — at ~10% left they hop back onto the shopping list.";
+  return `<div class="card"><div class="addrow" style="margin-top:0;padding-top:0;border-top:0">
+      <input type="text" id="${iid}" placeholder="${ph}" autocomplete="off" />
+      <button class="add" data-act="${which==="shop"?"kaddshop":"kaddpantry"}" aria-label="Add"><svg width="22" height="22"><use href="#i-plus"/></svg></button>
+    </div><div class="pmeta" style="margin-top:8px">${hint}</div></div>`;
+}
+function kShopRow(i){
+  const sub = i.checked && i.store ? `<span class="sub">${esc(i.store)}</span>` : "";
+  return `<li><div class="item ${i.checked?'done':''}" data-id="${i.id}">
+    <div class="box" data-act="kcheck"><svg><use href="#i-check"/></svg></div>
+    <div class="lab"><span class="txt" data-act="kedit">${esc(i.name)}${i.auto?'<span class="autotag">auto</span>':''}</span>${sub}</div>
+    <div class="qty"><button data-act="kdec" aria-label="Less">−</button><span class="n">${esc(fmtQty(i.qty,i.unit))}</span><button data-act="kinc" aria-label="More">+</button></div>
+    <button class="editb" data-act="kedit" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
+  </div></li>`;
+}
+function kPantryRow(p){
+  const pc=pctOf(p);
+  const pill=(pc!=null && pc<100) ? `<span class="sub"><span class="pctpill ${pctClass(pc)}">${pc}% left</span></span>` : "";
+  return `<li><div class="item" data-id="${p.id}">
+    <button class="lowflag ${kIsLow(p)?'on':''}" data-act="klow" title="Mark running low" aria-label="Running low"><svg><use href="#i-alert"/></svg></button>
+    <div class="lab"><span class="txt" data-act="kedit">${esc(p.name)}</span>${pill}</div>
+    <div class="qty"><button data-act="kdec" aria-label="Less">−</button><span class="n">${esc(fmtQty(p.qty,p.unit))}</span><button data-act="kinc" aria-label="More">+</button></div>
+    <button class="addmini" data-act="ktolist" style="margin-left:0">＋ List</button>
+    <button class="editb" data-act="kedit" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
+  </div></li>`;
+}
+function kShopHTML(){
+  const all=kShopAll();
+  const active=all.filter(i=>!i.checked).sort((a,b)=>a.name.localeCompare(b.name));
+  const cart=all.filter(i=>i.checked).sort((a,b)=>a.name.localeCompare(b.name));
+  let html=kAddCard("shop");
+  const stores=kStores().slice();
+  active.forEach(i=>{ if(i.store && !stores.includes(i.store)) stores.push(i.store); });
+  stores.push("");                                    // "Any store" group last
+  let any=false;
+  for(const store of stores){
+    const g=active.filter(i=>(i.store||"")===store);
+    if(!g.length) continue;
+    any=true;
+    let inner="";
+    for(const cid of aisleOrderFor(store)){
+      const cg=g.filter(i=>(i.cat||"other")===cid);
+      if(!cg.length) continue;
+      inner+=`<div class="grp">${esc(KCAT_NAME[cid]||cid)}</div><ul class="items">${cg.map(kShopRow).join("")}</ul>`;
+    }
+    html+=`<div class="card"><div class="ctitle"><svg><use href="#i-cart"/></svg>${esc(store||"Any store")}<span class="storecount">${g.length}</span></div>${inner}</div>`;
+  }
+  if(!any && !cart.length)
+    html+=`<div class="emptybig"><svg width="34" height="34"><use href="#i-cart"/></svg><p>The list is empty.<br>Add things above — they show up on both phones.</p></div>`;
+  if(cart.length){
+    html+=`<div class="card"><div class="ctitle"><svg><use href="#i-check"/></svg>In the cart<span class="storecount">${cart.length}</span></div>
+      <ul class="items">${cart.map(kShopRow).join("")}</ul>
+      <button class="clearcart" data-act="clearcart">Clear cart — it's already counted into your pantry</button></div>`;
+  }
+  return html;
+}
+function kPantryHTML(){
+  const all=kPantryAll();
+  let html=kAddCard("pantry");
+  if(!all.length)
+    return html+`<div class="emptybig"><svg width="34" height="34"><use href="#i-jar"/></svg><p>Nothing tracked yet.<br>Add what's at home so you don't double-buy.</p></div>`;
+  const low=all.filter(kIsLow).sort((a,b)=>a.name.localeCompare(b.name));
+  if(low.length)
+    html+=`<div class="card"><div class="ctitle pink"><svg><use href="#i-alert"/></svg>Running low<span class="storecount">${low.length}</span></div><ul class="items">${low.map(kPantryRow).join("")}</ul></div>`;
+  let inner="";
+  for(const cid of KCAT_IDS){
+    const g=all.filter(p=>!kIsLow(p) && (p.cat||"other")===cid).sort((a,b)=>a.name.localeCompare(b.name));
+    if(!g.length) continue;
+    inner+=`<div class="grp">${esc(KCAT_NAME[cid]||cid)}</div><ul class="items">${g.map(kPantryRow).join("")}</ul>`;
+  }
+  if(inner) html+=`<div class="card"><div class="ctitle"><svg><use href="#i-jar"/></svg>In the pantry</div>${inner}</div>`;
+  return html;
+}
+function renderKitchen(){
+  document.querySelectorAll("#kseg button").forEach(b=>b.classList.toggle("on", b.dataset.kview===kview));
+  document.getElementById("kitchenBody").innerHTML = kview==="shop" ? kShopHTML() : kPantryHTML();
+}
+
 /* ============================== wiring =========================== */
 function wireWeek(){
   document.querySelectorAll("#days .daypill").forEach(el=>{
@@ -1366,6 +1858,53 @@ if(HAS_DOM){
     else if(act==="edititem" || act==="editbtn"){ openEditor(id); }
   });
 
+  /* kitchen delegation */
+  document.getElementById("kseg").addEventListener("click", e=>{
+    const b=e.target.closest("button[data-kview]"); if(!b) return;
+    kview=b.dataset.kview; renderKitchen();
+  });
+  function kAddFromBar(which){
+    const iid=which==="shop" ? "kaddText" : "kaddPantry";
+    const input=document.getElementById(iid); if(!input) return;
+    const v=input.value.trim(); if(!v) return;
+    if(which==="shop") addGrocery(v); else addPantryItem(v);
+    renderKitchen(); updateTabs();
+    const i2=document.getElementById(iid); if(i2) i2.focus();
+  }
+  document.getElementById("kitchenBody").addEventListener("click", e=>{
+    const el=e.target.closest("[data-act]"); if(!el) return;
+    const act=el.dataset.act;
+    if(act==="kaddshop"){ kAddFromBar("shop"); return; }
+    if(act==="kaddpantry"){ kAddFromBar("pantry"); return; }
+    if(act==="clearcart"){ clearCart(); return; }
+    const row=el.closest("[data-id]"); if(!row) return;
+    const id=row.dataset.id;
+    if(act==="kcheck") kToggleCheck(id);
+    else if(act==="kinc") kStepQty(id, 1);
+    else if(act==="kdec") kStepQty(id, -1);
+    else if(act==="klow") toggleLowFlag(id);
+    else if(act==="ktolist") pantryToList(id);
+    else if(act==="kedit") openEditor(id);
+  });
+  document.getElementById("kitchenBody").addEventListener("keydown", e=>{
+    if(e.key!=="Enter") return;
+    if(e.target.id==="kaddText") kAddFromBar("shop");
+    else if(e.target.id==="kaddPantry") kAddFromBar("pantry");
+  });
+  /* "+ New store…" in the grocery editor */
+  document.getElementById("edStore").addEventListener("change", e=>{
+    if(e.target.value!=="__new__") return;
+    const name=addStoreNamed(prompt("New store name:"));
+    const t=items[editingId];
+    if(name && t && t.kind==="gitem") t.store=name;
+    const cur=(t && t.kind==="gitem") ? (t.store||"") : "";
+    const opts=['<option value="">Any store</option>']
+      .concat(kStores().map(s=>`<option value="${esc(s)}"${cur===s?" selected":""}>${esc(s)}</option>`));
+    opts.push('<option value="__new__">＋ New store…</option>');
+    e.target.innerHTML=opts.join("");
+    e.target.value=cur;
+  });
+
   /* projects view delegation */
   document.getElementById("projectsBody").addEventListener("click", e=>{
     const el=e.target.closest("[data-act]"); if(!el) return;
@@ -1407,7 +1946,8 @@ if(HAS_DOM){
   /* toast undo */
   document.getElementById("toastUndo").onclick=()=>{
     if(lastDeleted){
-      if(lastDeleted.seeded){ const t=items[lastDeleted.id]||lastDeleted.doc; t._gone=false; t.done=false; put(t); }
+      if(lastDeleted.multi){ lastDeleted.multi.forEach(put); }
+      else if(lastDeleted.seeded){ const t=items[lastDeleted.id]||lastDeleted.doc; t._gone=false; t.done=false; put(t); }
       else put(lastDeleted.doc);
       lastDeleted=null; render();
     }
@@ -1564,7 +2104,7 @@ if(!HAS_DOM){
   console.log("after ack, unread:", unreadCount(), "(0)", "| seenBy set:", !!items[note.id].seenBy);
 
   /* projects + scheduled step (dates relative to today so it never goes stale) */
-  const futSat=(()=>{ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate() + (6-((d.getDay()+6)%7)) + 14); return d; })(); // a Saturday ~2 weeks out
+  const futSat=(()=>{ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate() + (5-((d.getDay()+6)%7)) + 14); return d; })(); // a Saturday ~2 weeks out
   const futISO=isoOf(futSat);
   const proj={id:"proj:test", kind:"project", title:"Stairs", who:"ben", order:0, ts:1000};
   items[proj.id]=proj;
@@ -1722,6 +2262,76 @@ if(!HAS_DOM){
     const u=unplanWeek();
     console.log("un-plan moved only the auto one:", u===1 && !items["c:auto"].weekKey && items["c:mine"].weekKey==="2026-08-03");
     delete items["c:mine"]; delete items["c:auto"];
+  })();
+  /* kitchen: move-in converter + shopping↔pantry loop */
+  (function(){
+    const fx={
+      shopping:[
+        {id:"a1", name:"Milk", qty:2, cat:"dairy", store:"Costco", unit:"bottle", checked:false, updatedAt:1},
+        {id:"a2", name:"Eggs", qty:24, cat:"dairy", store:"Costco", unit:"pieces", checked:true, restocked:true, updatedAt:1},
+        {id:"a3", name:"Gone", qty:1, cat:"dairy", store:"", unit:"ea", checked:false, deleted:true, updatedAt:1},
+      ],
+      pantry:[
+        {id:"p1", name:"Flour", qty:10, full:10, cat:"baking", unit:"kg", low:false, updatedAt:1},
+        {id:"p2", name:"Rice", qty:1, full:1, cat:"grains", unit:"ea", low:true, autoListed:true, updatedAt:1},
+      ],
+      stores:["Costco","Walmart"],
+      storeAisleOrder:{ "Costco":{order:["produce","dairy","nope"], updatedAt:1} },
+      itemDefaults:{ "milk":{name:"Milk", store:"Costco", cat:"dairy", unit:"L", updatedAt:1} },
+      purchases:[ {id:"x1", name:"Milk", price:6, updatedAt:1} ],
+      autoRestock:true, autoList:true, autoListPct:0.1,
+    };
+    const docs=convertKitchen(fx);
+    console.log("kitchen convert skips tombstones:", !docs.some(x=>x.id==="gitem:a3"));
+    console.log("kitchen convert counts (2 shop, 2 pantry):",
+      docs.filter(x=>x.kind==="gitem").length===2 && docs.filter(x=>x.kind==="pantry").length===2);
+    console.log("kitchen convert ids deterministic:", docs.some(x=>x.id==="gitem:a1") && docs.some(x=>x.id==="pit:p2"));
+    console.log("kitchen convert ea→each:", docs.find(x=>x.id==="pit:p2").unit==="each");
+    console.log("kitchen convert keeps custom aisles:", docs.find(x=>x.id==="pit:p1").cat==="baking");
+    console.log("kitchen convert cart survives mid-trip:",
+      docs.find(x=>x.id==="gitem:a2").checked===true && docs.find(x=>x.id==="gitem:a2").restocked===true);
+    console.log("kitchen convert walk order drops unknown aisles:",
+      JSON.stringify(docs.find(x=>x.id==="gorder:costco").order)==='["produce","dairy"]');
+    console.log("kitchen convert defaults + settings:", docs.some(x=>x.id==="gdef:milk") && docs.some(x=>x.id==="kset:main"));
+    console.log("kitchen convert leaves purchases in the archive:", !docs.some(x=>/^gitem:x1|purchase/.test(x.id)));
+    docs.forEach(put);
+
+    console.log("aisle order: saved first, rest appended:",
+      JSON.stringify(aisleOrderFor("Costco").slice(0,2))==='["produce","dairy"]' && aisleOrderFor("Costco").length===KCAT_IDS.length);
+    console.log("aisle guess strawberries → produce:", guessKCat("Strawberries")==="produce");
+    console.log("aisle guess dish soap → household:", guessKCat("Dish soap")==="household");
+    console.log("unit convert 500 ml → 0.5 L:", convertAmount(500,"ml","L")===0.5);
+    console.log("fmtQty:", fmtQty(2,"each")==="2" && fmtQty(1.5,"L")==="1.5 L");
+    console.log("low threshold floors at one whole unit:", lowThreshold({qty:1, full:3, unit:"each"})===1);
+
+    const g1=addGrocery("Milk");
+    console.log("add uses remembered store/aisle/unit:", g1.store==="Costco" && g1.unit==="L" && g1.cat==="dairy" && g1.qty===0.5);
+    const rows=kShopAll().length;
+    addGrocery("Milk");
+    console.log("re-add merges instead of duplicating:", kShopAll().length===rows && items[g1.id].qty===1);
+
+    kToggleCheck("gitem:a1");                               // 2 bottles of milk into the cart
+    const pm=kPantryAll().find(p=>p.name==="Milk");
+    console.log("checking off restocks the pantry:", !!pm && pm.qty===2 && pm.full===2);
+    kToggleCheck("gitem:a1");
+    console.log("unchecking reverses the restock:", kPantryAll().find(p=>p.name==="Milk").qty===0);
+
+    const rice=items["pit:p2"]; rice.qty=0.2; rice.full=4; rice.low=false; rice.autoListed=false; put(rice);
+    const n=sweepAutoList();
+    const riceRow=kShopAll().find(i=>i.name==="Rice" && !i.checked);
+    console.log("auto-list adds a top-up once:", n===1 && !!riceRow && riceRow.auto===true && riceRow.qty===3.8);
+    console.log("refill never below one buy-unit:", refillFor({qty:0.05, full:1, unit:"each"})===1);
+    console.log("auto-list doesn't re-add:", sweepAutoList()===0);
+    addPantryStock("Rice", 1, "each", "grains");
+    console.log("restock re-arms auto-list + clears low:", items["pit:p2"].autoListed===false && items["pit:p2"].low===false);
+
+    const cartN=kCartItems().length;
+    kToggleCheck(riceRow.id);
+    console.log("cart holds checked items:", kCartItems().length===cartN+1);
+    clearCart();
+    console.log("clear cart removes checked rows, keeps undo:", kCartItems().length===0 && lastDeleted && lastDeleted.multi.length===cartN+1);
+    lastDeleted.multi.forEach(put);
+    console.log("undo restores the cart:", kCartItems().length===cartN+1);
   })();
   console.log("OK");
 }

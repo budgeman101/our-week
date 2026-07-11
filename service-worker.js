@@ -1,6 +1,6 @@
 /* Our Week — offline cache.
    Bump CACHE when you change files so phones pick up the update. */
-const CACHE = "our-week-v19";
+const CACHE = "our-week-v20";
 const ASSETS = [
   "./",
   "./index.html",

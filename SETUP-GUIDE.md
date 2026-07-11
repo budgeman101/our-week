@@ -117,6 +117,12 @@ Add it to the home screen so it opens full-screen with its own icon:
 
 - **Pick a day** — tap a day along the top. Today is highlighted. Use the **arrows** to move between weeks; *Jump to this week* brings you back.
 - **The List tab** — the master household to-do list, sorted **by who, then by area** just like the paper one, automatically. Dump tasks in by typing (no sorting needed — it guesses who/area, tap a tag to fix), by voice (**SIRI-SETUP.md**), or as a whole pile at once (**DUMP-IMPORT.md**). Saying "on Thursday" sends a task straight to that day. To schedule a List item, open it and set **Do on**; clear the date to send it back to the List.
+- **The Kitchen tab** — the old *Our Kitchen* grocery app lives here now, one app for everything. Two views, **Shopping** and **Pantry**:
+  - **First open** — the app automatically moves your old list, pantry, stores, and walk order in from the old kitchen database (you'll see a "Kitchen moved in" toast). It happens once per household; nothing to do.
+  - **Shopping** — type an item and tap **+**. Known items remember their store, aisle, and unit; new ones guess their aisle ("lemons" lands in Produce — tap the pencil to fix a guess). The list groups by **store**, then by **aisle in the order you walk it** (your Costco order came across).
+  - **In the store** — tap the circle as things go in the cart. Checking an item **counts it into your pantry right away** (unchecking takes it back out, so mis-taps are harmless). When you're done, **Clear cart** tidies the bought items away — with an Undo if you tap it by mistake.
+  - **Pantry** — what's at home, grouped by aisle, with a **% left** pill. Tap **−** as you use things up; at about **10% left an item hops back onto the shopping list by itself** (tagged *auto*). Tap the **⚠ triangle** to flag something as running low yourself; **＋ List** sends it to the list with enough to top you back up.
+  - **Edit** — tap any item's name or pencil to change its quantity, unit, aisle, or store (there's a **＋ New store…** option in the store picker).
 - **Edit anything** — tap any line (or its **pencil**) to open the editor. You can reword it, change who it's for, **split it into two**, or delete it. This works for your to-dos, the cleaning step, the morning/night/each-day routine, the Sam/Lou Lou notes, and even Lindsay's schedule, energy, and furniture lines.
 - **Lindsay's shifts** — her regular nights are already in every week: **Mon & Tue 5:30 PM, Fri 4:00 PM**. You only touch them when summer changes things:
   - **One-off change** (extra shift, or a different night) — tap **+ Add shift**. It pre-fills her usual start for that day (Mon/Tue 5:30, Fri 4:00, else 5:30); adjust the time, and optionally an end time (fine to run past midnight, e.g. 12:30 AM or 2:30 AM).
@@ -146,6 +152,7 @@ Add it to the home screen so it opens full-screen with its own icon:
 - **Phones don't match** — they must use the **same household code** (Part G) and the same Firebase keys (same `app.js`).
 - **Changed the code and the plan looks empty/different** — each code is its own separate plan. Switch back to the shared code in the gear menu.
 - **Updated the app but phones show the old version** — bump `CACHE = "our-week-v4"` to `v5` in `service-worker.js`, re-upload, and reopen.
+- **Kitchen tab is empty on a phone** — the one-time move-in needs internet the first time it runs; open the app once while online and it fills in (and syncs to the other phone).
 
 ---
 
