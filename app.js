@@ -277,14 +277,20 @@ function connect(){
 
 /* Siri (and remote dumps) drop raw docs into households/<code>/inbox —
    pull them in, auto-sort them, then clear the inbox. See SIRI-SETUP.md. */
+// One dictated line may hold several tasks — "buy milk, call the dentist".
+// Split on commas only: task wording often needs its "and"s intact.
+function splitDictation(s){
+  return String(s||"").split(",").map(x=>x.trim()).filter(Boolean);
+}
 function drainInbox(){
   inboxUnsub = db.collection("households").doc(household).collection("inbox")
     .onSnapshot(snap=>{
       let n=0;
       snap.forEach(doc=>{
         const f=doc.data()||{};
-        const text=String(f.text||f.name||"").trim();
-        if(text && importOne({text, who:f.who, area:f.area, date:f.date})) n++;
+        splitDictation(f.text||f.name).forEach(t=>{
+          if(importOne({text:t, who:f.who, area:f.area, date:f.date})) n++;
+        });
         doc.ref.delete().catch(()=>{});
       });
       if(n){ showToast("Added "+n+" to the List"); render(); }
@@ -1617,6 +1623,9 @@ if(!HAS_DOM){
   const st2=importOne({text:"Mow the lawn on Thursday"});
   console.log("'on Thursday' schedules to a day:", !!st2.weekKey && st2.day===3 && st2.text==="Mow the lawn");
   console.log("import file shape works:", importMany([{text:"Water the plants"},"Bottle depot"])===2);
+  console.log("dictation splits on commas, keeps 'and':",
+    JSON.stringify(splitDictation("buy milk, wash and fold laundry"))==='["buy milk","wash and fold laundry"]');
+  console.log("dictation single line stays whole:", splitDictation("clean the garage").length===1);
   console.log("masterTodos groups them:", masterTodos().length>=3);
 
   /* Johny is gone from the seed */

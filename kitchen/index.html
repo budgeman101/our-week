@@ -1588,14 +1588,17 @@ function addFromInbox(name, qty){
   if(existing){ existing.qty=round3((existing.qty||0)+qty); touch(existing); }
   else{ state.shopping.push({id:uid(),name,qty,cat,store,unit,checked:false,updatedAt:now()}); }
 }
-// Called for each item the Siri/Shortcuts inbox delivers.
+// Called for each item the Siri/Shortcuts inbox delivers. One dictated line
+// may hold several items — "milk, eggs and bread" — so split here instead of
+// making the Shortcut do it (keeps the Shortcut to two actions).
 function handleInboxItem(data){
-  const name=String((data&&data.name)||'').trim();
-  if(!name) return;
+  const raw=String((data&&data.name)||'').trim();
+  if(!raw) return;
   const qty=Number(data&&data.qty)||1;
-  addFromInbox(name,qty);
+  const parts=raw.replace(/\s+and\s+/gi,', ').split(',').map(s=>s.trim()).filter(Boolean);
+  parts.forEach(p=>addFromInbox(p,qty));
   commit();
-  toast(`Added “${name}”`);
+  toast(parts.length>1 ? `Added ${parts.length} items` : `Added “${parts[0]}”`);
 }
 
 // Case-insensitive search text for a view's filter box ('' = no filter). (#2)
