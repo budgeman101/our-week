@@ -1,0 +1,3422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Our Kitchen</title>
+<meta name="theme-color" content="#E07856" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Our Kitchen" />
+<!-- lives inside the Our Week install; no separate manifest -->
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" href="icon-180.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --cream:#FBF6EF;
+    --cream-2:#F3EAdd;
+    --card:#FFFFFF;
+    --ink:#4A3F35;
+    --muted:#9A8E80;
+    --line:#EEE4D6;
+    --terra:#E07856;
+    --terra-d:#CC6244;
+    --sage:#86A98C;
+    --sage-d:#6E9075;
+    --peach:#F6D9C7;
+    --butter:#F7E7B8;
+    --lav:#DcD3EC;
+    --shadow:0 6px 18px rgba(120,90,60,.10);
+    --shadow-sm:0 2px 8px rgba(120,90,60,.08);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+    font-size:16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+    background:var(--cream);
+    position:relative;
+  }
+  /* Header */
+  header{
+    position:sticky;top:0;z-index:20;
+    background:linear-gradient(135deg,var(--terra),#E89072);
+    color:#fff;
+    padding:calc(env(safe-area-inset-top) + 16px) 18px 16px;
+    box-shadow:var(--shadow-sm);
+  }
+  .head-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.25rem;letter-spacing:.2px}
+  .brand .logo{font-size:1.5rem}
+  .head-sub{margin-top:2px;font-size:.8rem;opacity:.92;font-weight:600}
+  .icon-btn{
+    background:rgba(255,255,255,.18);border:none;color:#fff;
+    width:38px;height:38px;border-radius:12px;font-size:1.1rem;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .icon-btn:active{transform:scale(.94)}
+  .sync-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#F7E7B8;margin-right:5px;vertical-align:middle}
+  .sync-dot.cloud{background:#BFE6C2}
+
+  /* Main */
+  main{flex:1;padding:16px 14px 96px;overflow-y:auto}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* Search bar */
+  .searchbar{margin-bottom:14px}
+  .searchbar input{width:100%;border:none;background:var(--card);box-shadow:var(--shadow-sm);border-radius:12px;
+    padding:11px 14px;font:inherit;font-weight:700;color:var(--ink);outline:none;-webkit-appearance:none}
+  .searchbar input::placeholder{color:var(--muted);font-weight:700}
+  .searchbar input:focus{box-shadow:0 0 0 2px var(--terra) inset}
+  .searchbar{position:relative}
+  .searchbar .sico{position:absolute;left:13px;top:50%;transform:translateY(-50%);
+    width:18px;height:18px;color:var(--muted);pointer-events:none}
+  .searchbar input{padding-left:40px}
+
+  /* SVG icons (replace emoji) */
+  .bico{width:1.15em;height:1.15em;flex:none;vertical-align:-0.2em;margin-right:7px}
+  .btn .bico{width:1.1em;height:1.1em}
+  .add-ing-btn .bico{width:1em;height:1em;margin-right:6px}
+  .icon-btn svg{width:20px;height:20px}
+  .brand .logo{display:flex;align-items:center}
+  .brand .logo svg{width:26px;height:26px}
+  .tab .ico svg{width:24px;height:24px;display:block}
+
+  /* Staples quick-add */
+  .staple-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center}
+  .staple-chip{display:inline-flex;align-items:center;background:var(--card);border:1.5px solid var(--line);border-radius:18px;overflow:hidden}
+  .staple-add{border:none;background:transparent;font:inherit;font-weight:800;font-size:.82rem;color:var(--terra-d);cursor:pointer;padding:7px 4px 7px 12px}
+  .staple-add:active{background:var(--peach)}
+  .staple-del{border:none;background:transparent;color:var(--muted);font-size:1rem;cursor:pointer;padding:7px 9px 7px 4px;line-height:1}
+  .staple-del:active{color:#C0503A}
+  .staple-all{border:1.5px dashed var(--line);background:transparent;color:var(--muted);border-radius:18px;
+    padding:7px 14px;font:inherit;font-weight:800;font-size:.82rem;cursor:pointer}
+  .staple-all:active{background:var(--cream-2)}
+
+  /* Add bar */
+  .addbar{
+    display:flex;gap:8px;background:var(--card);padding:8px;border-radius:16px;
+    box-shadow:var(--shadow-sm);margin-bottom:14px;align-items:center;
+  }
+  .addbar input[type=text]{
+    flex:1;border:none;outline:none;font:inherit;font-weight:600;color:var(--ink);
+    background:transparent;padding:8px 6px;min-width:0;
+  }
+  .addbar input::placeholder{color:var(--muted)}
+  .addbar select{
+    border:none;background:var(--cream-2);font:inherit;font-weight:700;color:var(--ink);
+    border-radius:10px;padding:8px 6px;max-width:84px;outline:none;
+  }
+  .add-btn{
+    background:var(--terra);color:#fff;border:none;width:40px;height:40px;border-radius:12px;
+    font-size:1.4rem;font-weight:700;cursor:pointer;flex:none;line-height:1;
+  }
+  .add-btn:active{transform:scale(.92)}
+  /* Store picker — shopping add bar wraps to two rows */
+  #shopAddbar,#pantryAddbar{flex-wrap:wrap}
+  #shopAddbar input[type=text],#pantryAddbar input[type=text]{flex:1 1 100%}
+  #shopAddbar select,#pantryAddbar select{flex:1;max-width:none}
+  /* Store groups in the shopping list */
+  .store-group{margin-bottom:18px}
+  .store-head{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    font-weight:800;font-size:.95rem;color:var(--ink);background:var(--cream-2);
+    border-radius:12px;padding:9px 12px;margin:0 2px 10px}
+  .store-count{background:var(--terra);color:#fff;font-size:.72rem;min-width:20px;height:20px;
+    border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 6px;font-weight:800}
+  .store-head-r{display:flex;align-items:center;gap:8px;flex:none}
+  /* Aisle-order editor (#10) */
+  .aisle-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--card);
+    border:1.5px solid var(--line);border-radius:12px;padding:9px 12px;margin-bottom:6px}
+  .aisle-name{font-weight:700}
+  .aisle-moves{display:flex;gap:6px;flex:none}
+  .aisle-moves .mini-btn{min-width:36px;text-align:center}
+  #aisleList{max-height:48vh;overflow-y:auto;margin-bottom:4px}
+
+  /* Spend & price insights (#11) */
+  .ins-total{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow-sm);margin-bottom:8px;text-align:center}
+  .ins-total .big{font-size:1.9rem;font-weight:800;color:var(--ink);line-height:1.1}
+  .ins-total .sub2{color:var(--muted);font-weight:700;font-size:.82rem;margin-top:3px}
+  .ins-section-label{font-weight:800;color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.5px;margin:16px 4px 8px}
+  .ins-bar-row{margin-bottom:9px}
+  .ins-bar-head{display:flex;justify-content:space-between;font-weight:700;font-size:.85rem;margin-bottom:3px;color:var(--ink)}
+  .ins-bar{height:8px;border-radius:6px;background:var(--cream-2);overflow:hidden}
+  .ins-bar>span{display:block;height:100%;background:var(--terra);border-radius:6px}
+  .ins-item{display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:8px 11px;margin-bottom:6px}
+  .ins-item .nm{flex:1;font-weight:700;min-width:0;word-break:break-word}
+  .ins-item .pr{font-weight:800;color:var(--sage-d);font-size:.88rem;white-space:nowrap}
+  .ins-item .jump{background:#F3E0DA;color:#C0503A;font-size:.6rem;font-weight:800;padding:2px 6px;border-radius:8px;text-transform:uppercase;white-space:nowrap}
+  .ins-cheap{color:var(--muted);font-weight:700;font-size:.72rem;margin-top:2px}
+  #insightsBody{max-height:70vh;overflow-y:auto}
+  .store-btn{background:var(--lav);color:#5b4b86}
+  /* Store chooser modal */
+  .store-choices{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+  .store-choice{border:1.5px solid var(--line);background:var(--card);border-radius:20px;
+    padding:9px 14px;font:inherit;font-weight:800;font-size:.85rem;cursor:pointer;color:var(--ink)}
+  .store-choice.on{background:var(--terra);color:#fff;border-color:var(--terra)}
+  /* Store icons (SVG) */
+  .st-ic{width:18px;height:18px;flex:none}
+  .store-name{display:inline-flex;align-items:center;gap:6px;min-width:0}
+  .store-choice{display:inline-flex;align-items:center;gap:6px}
+  .store-choice .st-ic{width:16px;height:16px}
+  .store-btn{display:inline-flex;align-items:center;justify-content:center}
+  .store-btn .st-ic{width:16px;height:16px}
+  /* Category & state icons (SVG) */
+  .cat-head .em{display:inline-flex;align-items:center}
+  .cat-ic{width:16px;height:16px;flex:none;vertical-align:-3px}
+  .aisle-name{display:inline-flex;align-items:center;gap:7px}
+  .ins-cat{display:inline-flex;align-items:center;gap:6px}
+  .empty .big svg{width:54px;height:54px}
+  .mini-btn .bico{width:1em;height:1em;margin-right:4px}
+  .mico{width:13px;height:13px;vertical-align:-2px;margin-right:3px;flex:none}
+  .star svg{width:18px;height:18px;vertical-align:-3px}
+  .check svg{width:15px;height:15px;opacity:0}
+  .check.on svg{opacity:1}
+  .staple-add svg{width:13px;height:13px;vertical-align:-2px;margin-right:4px;fill:currentColor}
+  /* Per-item default-store editor (Settings) */
+  .def-row{display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--line);
+    border-radius:12px;padding:7px 10px;margin-bottom:6px}
+  .def-name{flex:1;font-weight:700;min-width:0;word-break:break-word}
+  .def-store{border:1.5px solid var(--line);background:var(--cream-2);border-radius:10px;
+    padding:7px 8px;font:inherit;font-weight:700;color:var(--ink);max-width:140px;outline:none}
+  #itemDefaultsList{max-height:38vh;overflow-y:auto}
+  /* Meal planning toolbar */
+  .meal-tools{display:flex;gap:8px;margin-bottom:12px}
+  .tool-btn{flex:1;border:none;background:var(--card);box-shadow:var(--shadow-sm);border-radius:12px;
+    padding:11px 8px;font:inherit;font-weight:800;font-size:.8rem;color:var(--terra-d);cursor:pointer}
+  .tool-btn:active{transform:scale(.98)}
+  /* Meal library chips */
+  .lib-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .lib-chip{border:1.5px solid var(--line);background:var(--card);border-radius:18px;padding:7px 12px;
+    font:inherit;font-weight:800;font-size:.82rem;color:var(--terra-d);cursor:pointer}
+  .lib-chip:active{background:var(--peach)}
+  /* Copy-to-days picker */
+  .daypick{display:flex;gap:5px;flex-wrap:wrap}
+  .day-pick{flex:1;min-width:34px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;
+    padding:6px 3px;font:inherit;font-weight:800;font-size:.8rem;color:var(--ink);cursor:pointer;text-align:center;line-height:1.1}
+  .day-pick small{display:block;color:var(--muted);font-weight:700;font-size:.64rem}
+  .day-pick.on{background:var(--sage);color:#fff;border-color:var(--sage)}
+  .day-pick.on small{color:#eaf3ea}
+  .day-pick.base{opacity:.4;cursor:default}
+  /* Cook-from-pantry suggestions */
+  .suggest-wrap{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  #cookNow:empty{display:none}
+
+  /* Category groups */
+  .cat-group{margin-bottom:16px}
+  .cat-head{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.82rem;
+    text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 4px 8px}
+  .cat-head .em{font-size:1rem}
+  ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+
+  .item{
+    display:flex;align-items:center;gap:10px;background:var(--card);
+    border-radius:14px;padding:10px 12px;box-shadow:var(--shadow-sm);
+  }
+  .check{
+    width:26px;height:26px;border-radius:50%;border:2.5px solid var(--sage);
+    background:transparent;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:.9rem;font-weight:800;padding:0;
+  }
+  .check.on{background:var(--sage);border-color:var(--sage)}
+  .item .name{flex:1;font-weight:700;min-width:0;word-break:break-word}
+  .item.done .name{text-decoration:line-through;color:var(--muted);font-weight:600}
+  .qty{display:flex;align-items:center;gap:2px;background:var(--cream-2);border-radius:10px;padding:2px;flex:none}
+  .qty button{width:26px;height:26px;border:none;background:transparent;font:inherit;font-weight:800;
+    font-size:1.1rem;color:var(--terra-d);cursor:pointer;border-radius:8px;line-height:1}
+  .qty button:active{background:var(--peach)}
+  .qty .n{min-width:20px;text-align:center;font-weight:800;font-size:.95rem;padding:0 5px;white-space:nowrap}
+  .mini-btn{
+    border:none;background:var(--peach);color:var(--terra-d);font:inherit;font-weight:800;
+    font-size:.75rem;border-radius:10px;padding:7px 9px;cursor:pointer;flex:none;white-space:nowrap;
+  }
+  .mini-btn:active{transform:scale(.94)}
+  .mini-btn.sage{background:#D8EBDA;color:var(--sage-d)}
+  .star{border:none;background:transparent;font-size:1.2rem;cursor:pointer;flex:none;padding:0 2px;opacity:.35}
+  .star.on{opacity:1}
+  .del{border:none;background:transparent;color:var(--muted);font-size:1.3rem;cursor:pointer;flex:none;
+    width:28px;height:28px;border-radius:8px;line-height:1}
+  .del:active{background:var(--cream-2)}
+  .auto-tag{display:inline-block;margin-left:6px;background:var(--butter);color:#8a6d2f;font-size:.6rem;
+    font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 6px;border-radius:8px;
+    vertical-align:middle;white-space:nowrap}
+
+  /* "How full" percentage pill on pantry rows */
+  .pct-pill{flex:none;font-weight:800;font-size:.72rem;border-radius:10px;padding:3px 7px;white-space:nowrap}
+  .pct-pill.p-hi{background:#D8EBDA;color:var(--sage-d)}
+  .pct-pill.p-mid{background:var(--butter);color:#8a6d2f}
+  .pct-pill.p-lo{background:#F3E0DA;color:#C0503A}
+  /* Freshness / use-by pill (#1) */
+  .fresh-pill{flex:none;font-weight:800;font-size:.66rem;border-radius:10px;padding:3px 7px;white-space:nowrap;
+    text-transform:uppercase;letter-spacing:.3px}
+  .fresh-pill.f-soon{background:var(--butter);color:#8a6d2f}
+  .fresh-pill.f-exp{background:#F3E0DA;color:#C0503A}
+  /* Predicted run-out pill (#14) */
+  .pred-pill{flex:none;font-weight:800;font-size:.66rem;border-radius:10px;padding:3px 7px;white-space:nowrap}
+  .pred-pill.pr-soon{background:#F3E0DA;color:#C0503A}
+  .pred-pill.pr-ok{background:var(--cream-2);color:var(--muted)}
+
+  .section-label{font-weight:800;color:var(--muted);font-size:.8rem;text-transform:uppercase;
+    letter-spacing:.6px;margin:18px 4px 8px}
+  .list-actions{display:flex;justify-content:flex-end;margin-top:4px}
+  .text-btn{background:none;border:none;color:var(--terra-d);font:inherit;font-weight:800;
+    font-size:.85rem;cursor:pointer;padding:6px}
+
+  /* Empty state */
+  .empty{text-align:center;color:var(--muted);padding:48px 24px;font-weight:600}
+  .empty .big{font-size:3rem;display:block;margin-bottom:10px}
+
+  /* Meals */
+  .week-nav{display:flex;align-items:center;justify-content:space-between;background:var(--card);
+    border-radius:14px;padding:8px 8px;box-shadow:var(--shadow-sm);margin-bottom:14px}
+  .week-nav button{border:none;background:var(--cream-2);width:38px;height:38px;border-radius:11px;
+    font-size:1.2rem;font-weight:800;color:var(--terra-d);cursor:pointer}
+  .week-nav .label{font-weight:800;font-size:.95rem;text-align:center}
+  .week-nav .label small{display:block;color:var(--muted);font-weight:700;font-size:.72rem}
+  .day-card{background:var(--card);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow-sm);margin-bottom:10px}
+  .day-card.today{border:2px solid var(--peach)}
+  .day-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+  .day-head .dname{font-weight:800}
+  .day-head .ddate{color:var(--muted);font-weight:700;font-size:.82rem}
+  .day-head .badge{background:var(--peach);color:var(--terra-d);font-size:.66rem;font-weight:800;
+    padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px}
+  .meals-wrap{display:flex;flex-wrap:wrap;gap:6px}
+  .meal-chip{display:flex;align-items:center;gap:6px;border:none;font:inherit;cursor:pointer;
+    background:var(--cream-2);border-radius:20px;padding:7px 12px;font-weight:700;font-size:.85rem;color:var(--ink)}
+  .meal-chip .slot-dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .slot-breakfast{background:#F2C078}.slot-lunch{background:var(--sage)}
+  .slot-dinner{background:var(--terra)}.slot-snack{background:#B9A6DE}
+  .add-meal{border:1.5px dashed var(--line);background:transparent;color:var(--muted);
+    border-radius:20px;padding:7px 12px;font:inherit;font-weight:800;font-size:.85rem;cursor:pointer}
+  .add-meal:active{background:var(--cream-2)}
+
+  /* Bottom nav */
+  nav.tabbar{
+    position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+    width:100%;max-width:480px;
+    background:var(--card);
+    display:flex;border-top:1px solid var(--line);
+    padding:6px 8px calc(env(safe-area-inset-bottom) + 6px);
+    z-index:30;box-shadow:0 -4px 18px rgba(120,90,60,.07);
+  }
+  .tab{flex:1;background:none;border:none;cursor:pointer;font:inherit;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0;border-radius:12px;font-weight:800;font-size:.7rem}
+  .tab .ico{font-size:1.4rem;line-height:1}
+  .tab.active{color:var(--terra-d)}
+  .tab.active .ico{transform:scale(1.06)}
+  .tab .count{position:absolute;margin-left:18px;margin-top:-4px;background:var(--terra);color:#fff;
+    font-size:.6rem;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    padding:0 4px;font-weight:800}
+
+  /* Modal */
+  .overlay{position:fixed;inset:0;background:rgba(60,45,35,.45);z-index:50;display:none;
+    align-items:flex-end;justify-content:center}
+  .overlay.show{display:flex}
+  .sheet{background:var(--cream);width:100%;max-width:480px;border-radius:22px 22px 0 0;
+    padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);box-shadow:0 -10px 40px rgba(0,0,0,.2);
+    max-height:90vh;overflow-y:auto;animation:slideup .25s ease}
+  @keyframes slideup{from{transform:translateY(100%)}to{transform:none}}
+  .sheet h2{margin:0 0 4px;font-size:1.2rem;font-weight:800}
+  .sheet .sub{color:var(--muted);font-weight:600;font-size:.85rem;margin-bottom:14px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-weight:800;font-size:.78rem;text-transform:uppercase;
+    letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+  .field input[type=text],.field input[type=date],.field input[type=number],.field select{width:100%;border:1.5px solid var(--line);background:var(--card);
+    border-radius:12px;padding:11px 12px;font:inherit;font-weight:700;color:var(--ink);outline:none}
+  .field input:focus,.field select:focus{border-color:var(--terra)}
+  .slots{display:flex;gap:6px;flex-wrap:wrap}
+  .slot-pick{border:1.5px solid var(--line);background:var(--card);border-radius:20px;padding:8px 14px;
+    font:inherit;font-weight:800;font-size:.85rem;cursor:pointer;color:var(--ink)}
+  .slot-pick.on{background:var(--terra);color:#fff;border-color:var(--terra)}
+  .ing-row{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+  .ing-row input.ing-name{flex:1}
+  .ing-row input.ing-qty{width:46px;text-align:center}
+  .ing-row .ing-unit{width:62px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;
+    padding:9px 4px;font:inherit;font-weight:700;color:var(--ink);outline:none}
+  .ing-row .del{flex:none}
+  .ing-row input{border:1.5px solid var(--line);background:var(--card);border-radius:10px;
+    padding:9px 10px;font:inherit;font-weight:700;color:var(--ink);outline:none;min-width:0}
+  .btn{display:block;width:100%;border:none;border-radius:14px;padding:14px;font:inherit;
+    font-weight:800;font-size:1rem;cursor:pointer;margin-top:8px}
+  .btn.primary{background:var(--terra);color:#fff}
+  .btn.sage{background:var(--sage);color:#fff}
+  .btn.ghost{background:transparent;color:var(--muted)}
+  .btn.danger{background:#F3E0DA;color:#C0503A}
+  .btn.cook{background:#C9743F;color:#fff}
+  .btn:active{transform:scale(.99)}
+  .add-ing-btn{background:var(--cream-2);color:var(--terra-d);border:none;border-radius:10px;
+    padding:9px;font:inherit;font-weight:800;cursor:pointer;width:100%;margin-top:2px;font-size:.85rem}
+
+  /* Toast */
+  #toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:30px;font-weight:700;font-size:.88rem;
+    box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.3s;z-index:60;max-width:88%;text-align:center}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast{display:flex;align-items:center;gap:6px;justify-content:center}
+  .toast-undo{background:transparent;border:none;color:var(--butter);font:inherit;font-weight:800;
+    font-size:.88rem;cursor:pointer;padding:2px 4px;text-decoration:underline;flex:none}
+
+  .note{background:var(--butter);border-radius:12px;padding:10px 12px;font-size:.82rem;font-weight:700;
+    color:#8a6d2f;margin-bottom:12px;line-height:1.4}
+
+  /* Receipt scan */
+  .scan-btn{display:block;width:100%;border:none;background:var(--card);box-shadow:var(--shadow-sm);
+    border-radius:12px;padding:12px;font:inherit;font-weight:800;font-size:.9rem;color:var(--terra-d);
+    cursor:pointer;margin-bottom:12px}
+  .scan-btn:active{transform:scale(.99)}
+  .rcpt-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:var(--card);
+    border:1.5px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:8px}
+  .rcpt-row.off{opacity:.42}
+  .rcpt-row .check{flex:none}
+  .rcpt-name{flex:1 1 56%;border:1.5px solid var(--line);background:var(--cream-2);border-radius:10px;
+    padding:8px 10px;font:inherit;font-weight:700;color:var(--ink);outline:none;min-width:0}
+  .rcpt-price{font-weight:800;color:var(--sage-d);font-size:.85rem;flex:none;margin-left:auto}
+  .rcpt-qty{width:48px;text-align:center;border:1.5px solid var(--line);background:var(--cream-2);
+    border-radius:10px;padding:8px 4px;font:inherit;font-weight:700;color:var(--ink);outline:none}
+  .rcpt-unit,.rcpt-cat{border:1.5px solid var(--line);background:var(--cream-2);border-radius:10px;
+    padding:8px 4px;font:inherit;font-weight:700;color:var(--ink);outline:none;max-width:44%}
+
+  /* Recipe import + steps */
+  #importRow{display:flex;gap:6px}
+  #importRow input{flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:12px;
+    padding:11px 12px;font:inherit;font-weight:700;color:var(--ink);outline:none;min-width:0}
+  #importRow input:focus{border-color:var(--terra)}
+  .field textarea{width:100%;border:1.5px solid var(--line);background:var(--card);border-radius:12px;
+    padding:11px 12px;font:inherit;font-weight:600;color:var(--ink);outline:none;resize:vertical;line-height:1.45}
+  .field textarea:focus{border-color:var(--terra)}
+
+  /* Recipe cards (#3) */
+  .rec-card{background:var(--card);border-radius:14px;padding:12px 13px;box-shadow:var(--shadow-sm);margin-bottom:10px}
+  .rec-head{display:flex;align-items:center;gap:8px;font-weight:800;font-size:1rem;color:var(--ink)}
+  .rec-head .slot-dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .rec-name{cursor:pointer;word-break:break-word}
+  .rec-meta{color:var(--muted);font-weight:700;font-size:.8rem;margin:4px 0 10px}
+  .rec-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="head-row">
+      <div>
+        <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 11 4-7"/><path d="m19 11-4-7"/><path d="M2 11h20"/><path d="m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.6-7.4"/><path d="m9 11 1 9"/><path d="m15 11-1 9"/></svg></span><span>Our Kitchen</span></div>
+        <div class="head-sub" id="syncStatus"><span class="sync-dot"></span>Loading…</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="icon-btn" id="insightsBtn" title="Spend & prices" aria-label="Spend and prices"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="20" x2="20" y2="20"/><line x1="7" y1="20" x2="7" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="17" y1="20" x2="17" y2="11"/></svg></button>
+        <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- SHOPPING -->
+    <section class="view active" id="view-shopping">
+      <div class="addbar" id="shopAddbar">
+        <input type="text" id="shopInput" placeholder="Add to list…" autocomplete="off" />
+        <select id="shopStore" title="Store" aria-label="Store"></select>
+        <select id="shopUnit" title="Unit" aria-label="Unit"></select>
+        <select id="shopCat" title="Aisle" aria-label="Aisle"></select>
+        <button class="add-btn" id="shopAdd" aria-label="Add to list">+</button>
+      </div>
+      <div class="searchbar"><svg class="sico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="search" id="shopSearch" placeholder="Search your list…" autocomplete="off" aria-label="Search shopping list" /></div>
+      <button class="scan-btn" id="scanListBtn"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Snap a handwritten list</button>
+      <input type="file" id="listFile" accept="image/*" capture="environment" style="display:none" />
+      <div id="stapleBar"></div>
+      <div id="shopList"></div>
+    </section>
+
+    <!-- PANTRY -->
+    <section class="view" id="view-pantry">
+      <div class="addbar" id="pantryAddbar">
+        <input type="text" id="pantryInput" placeholder="Add to pantry…" autocomplete="off" />
+        <select id="pantryUnit" title="Unit" aria-label="Unit"></select>
+        <select id="pantryCat" title="Aisle" aria-label="Aisle"></select>
+        <button class="add-btn" id="pantryAdd" aria-label="Add to pantry">+</button>
+      </div>
+      <div class="searchbar"><svg class="sico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="search" id="pantrySearch" placeholder="Search your pantry…" autocomplete="off" aria-label="Search pantry" /></div>
+      <button class="scan-btn" id="scanReceiptBtn"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Scan a receipt</button>
+      <input type="file" id="receiptFile" accept="image/*" capture="environment" style="display:none" />
+      <button class="scan-btn" id="suggestBtn"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7a2 2 0 0 0 2 2 2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3Z"/><path d="M21 15v7"/></svg>Recipe ideas — copy prompt</button>
+      <div id="cookNow"></div>
+      <div id="pantryList"></div>
+    </section>
+
+    <!-- MEALS -->
+    <section class="view" id="view-meals">
+      <div class="week-nav">
+        <button id="weekPrev" aria-label="Previous week">‹</button>
+        <div class="label" id="weekLabel">Week<small>—</small></div>
+        <button id="weekNext" aria-label="Next week">›</button>
+      </div>
+      <div class="meal-tools">
+        <button class="tool-btn" id="planWeekBtn"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3Z"/><path d="M5 3v4"/><path d="M3 5h4"/><path d="M19 17v4"/><path d="M17 19h4"/></svg>Plan my week</button>
+        <button class="tool-btn" id="weekToList"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Add week to list</button>
+        <button class="tool-btn" id="copyWeek"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>Copy to next week</button>
+      </div>
+      <div id="weekDays"></div>
+    </section>
+
+    <!-- RECIPES -->
+    <section class="view" id="view-recipes">
+      <button class="scan-btn" id="addRecipeBtn">＋ New recipe</button>
+      <button class="scan-btn" id="genRecipeBtn"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7a2 2 0 0 0 2 2 2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3Z"/><path d="M21 15v7"/></svg>Generate from pantry — copy prompt</button>
+      <button class="scan-btn" id="pasteRecipeBtn"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Paste AI recipes</button>
+      <div class="searchbar"><svg class="sico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="search" id="recipeSearch" placeholder="Search recipes…" autocomplete="off" aria-label="Search recipes" /></div>
+      <div id="recipeList"></div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <a class="tab" href="../" style="text-decoration:none" aria-label="Switch to Our Week"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="m9 14 2 2 4-4"/></svg></span>Week</a>
+    <button class="tab active" data-view="shopping"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></span><span class="count" id="shopCount" style="display:none"></span>Shopping</button>
+    <button class="tab" data-view="pantry"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="6" ry="2.5"/><path d="M6 6v12c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V6"/><path d="M6 12c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/></svg></span>Pantry</button>
+    <button class="tab" data-view="meals"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>Meals</button>
+    <button class="tab" data-view="recipes"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Z"/><line x1="2" y1="9" x2="22" y2="9"/><path d="M4 12H2M22 12h-2"/><path d="M9 6V4M13 6V4M17 6V4"/></svg></span>Recipes</button>
+  </nav>
+</div>
+
+<!-- Meal modal -->
+<div class="overlay" id="mealOverlay">
+  <div class="sheet" id="mealSheet">
+    <h2 id="mealTitle">Add a meal</h2>
+    <div class="sub" id="mealDay">—</div>
+    <div class="field" id="libField" style="display:none">
+      <label>Quick add from your meals</label>
+      <div class="lib-chips" id="libChips"></div>
+    </div>
+    <div class="field" id="importField">
+      <label>Import a recipe</label>
+      <div id="importRow">
+        <input type="text" id="importUrl" placeholder="Paste a recipe link…" autocomplete="off" inputmode="url" />
+        <button class="btn primary" id="importUrlBtn" style="width:auto;margin:0;padding:0 16px">Import</button>
+      </div>
+      <button class="add-ing-btn" id="importPhotoBtn" style="margin-top:6px"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>…or snap a cookbook page</button>
+      <input type="file" id="importPhotoFile" accept="image/*" capture="environment" style="display:none" />
+    </div>
+    <div class="field">
+      <label>Meal</label>
+      <input type="text" id="mealName" placeholder="e.g. Spaghetti bolognese" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>When</label>
+      <div class="slots" id="mealSlots">
+        <button class="slot-pick on" data-slot="breakfast">Breakfast</button>
+        <button class="slot-pick" data-slot="lunch">Lunch</button>
+        <button class="slot-pick" data-slot="dinner">Dinner</button>
+        <button class="slot-pick" data-slot="snack">Snack</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Ingredients (optional)</label>
+      <div id="ingList"></div>
+      <button class="add-ing-btn" id="addIng">+ Add ingredient</button>
+    </div>
+    <div class="field" id="stepsField" style="display:none">
+      <label>Steps</label>
+      <textarea id="stepText" rows="6" placeholder="One step per line"></textarea>
+    </div>
+    <div class="field">
+      <label>Also add to other days</label>
+      <div class="daypick" id="mealDays"></div>
+    </div>
+    <button class="btn cook" id="mealCook"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="13" r="7.5"/><circle cx="10.5" cy="13" r="2.5"/><line x1="16.5" y1="8" x2="22" y2="4"/></svg>Cook it — use up the pantry</button>
+    <button class="btn sage" id="mealToList"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Send ingredients to shopping list</button>
+    <button class="btn primary" id="mealSave">Save meal</button>
+    <button class="btn danger" id="mealDelete" style="display:none">Delete meal</button>
+    <button class="btn ghost" id="mealCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Pantry item editor modal -->
+<div class="overlay" id="pantryOverlay">
+  <div class="sheet">
+    <h2 id="pantryTitle">Edit item</h2>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="pEditName" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="pEditCat"></select>
+    </div>
+    <div class="field">
+      <label>In stock</label>
+      <div style="display:flex;gap:6px">
+        <input type="number" id="pEditQty" min="0" step="any" inputmode="decimal" style="flex:1" />
+        <select id="pEditUnit" style="max-width:120px"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>How full is it now?</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="pEditPct" min="0" max="100" step="1" inputmode="numeric" style="flex:1" placeholder="e.g. 70" />
+        <span style="font-weight:800;color:var(--muted)">% of a full one</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Use by (optional)</label>
+      <input type="date" id="pEditExpiry" />
+      <div class="sub" id="pEditExpiryHint" style="margin:6px 0 0">—</div>
+    </div>
+    <div class="field">
+      <label>Everyday staple</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--ink)">
+        <input type="checkbox" id="pEditEveryday" /> Predict when I'll run out and reorder early
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:9px">
+        <span style="font-weight:700;color:var(--ink)">a full one lasts about</span>
+        <input type="number" id="pEditDaysPerPack" min="0" step="1" inputmode="numeric" placeholder="auto"
+          style="width:72px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:9px;font:inherit;font-weight:700;color:var(--ink);outline:none" />
+        <span style="font-weight:700;color:var(--ink)">days</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>What “a full one” is (100%)</label>
+      <input type="number" id="pEditFull" min="0" step="any" inputmode="decimal" placeholder="auto-learned" />
+    </div>
+    <div class="field">
+      <label>Buy as packs (optional)</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-weight:700;color:var(--ink)">1 =</span>
+        <input type="number" id="pEditPackPer" min="0" step="any" inputmode="decimal" placeholder="e.g. 4"
+          style="width:84px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:9px;font:inherit;font-weight:700;color:var(--ink);outline:none" />
+        <select id="pEditPackUnit" style="max-width:130px"></select>
+      </div>
+      <div class="sub" style="margin:6px 0 0">Add a familiar count (2 milks) and the list stores the real amount (8 L). Leave the number blank for none.</div>
+    </div>
+    <div class="field">
+      <label>Flag “low” when at or below</label>
+      <input type="number" id="pEditLow" min="0" inputmode="numeric" placeholder="0 = off" />
+    </div>
+    <div class="field">
+      <label>Last price (optional)</label>
+      <input type="number" id="pEditPrice" min="0" step="any" inputmode="decimal" placeholder="e.g. 1.89" />
+      <div class="sub" style="margin:6px 0 0">Used for recipe cost estimates. Scanned receipts fill this in.</div>
+    </div>
+    <button class="btn primary" id="pEditSave">Save</button>
+    <button class="btn ghost" id="pEditCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Store chooser modal -->
+<div class="overlay" id="storeOverlay">
+  <div class="sheet">
+    <h2 id="storeTitle">Choose a store</h2>
+    <div class="sub">Pick where to buy this, or add a new store.</div>
+    <div class="store-choices" id="storeChoices"></div>
+    <div class="field">
+      <label>Add a new store</label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="newStoreName" placeholder="e.g. Costco" autocomplete="off" style="flex:1" />
+        <button class="btn primary" id="addStoreBtn" style="width:auto;margin:0;padding:0 16px">Add</button>
+      </div>
+    </div>
+    <button class="btn ghost" id="storeCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="overlay" id="setOverlay">
+  <div class="sheet">
+    <h2>Settings</h2>
+    <div class="sub">Share a household code so you and your partner see the same lists.</div>
+    <div class="note" id="setNote">—</div>
+    <div class="field">
+      <label>Household code</label>
+      <input type="text" id="setHousehold" placeholder="e.g. ben-and-jo" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>When you check off a bought item</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--ink)">
+        <input type="checkbox" id="setRestock" /> Add it to the pantry automatically
+      </label>
+    </div>
+    <div class="field">
+      <label>When a pantry item is almost gone</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--ink)">
+        <input type="checkbox" id="setAutoList" /> Add it to the shopping list automatically
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:9px">
+        <span style="font-weight:700;color:var(--ink)">when it drops to</span>
+        <input type="number" id="setAutoListPct" min="1" max="100" step="1" inputmode="numeric"
+          style="width:68px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:9px;font:inherit;font-weight:700;color:var(--ink);outline:none" />
+        <span style="font-weight:700;color:var(--ink)">% or less left</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Reminders</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--ink)">
+        <input type="checkbox" id="setNotify" /> Remind me to use food before it goes off
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:9px">
+        <span style="font-weight:700;color:var(--ink)">warn</span>
+        <input type="number" id="setNotifyLead" min="1" max="14" step="1" inputmode="numeric"
+          style="width:68px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:9px;font:inherit;font-weight:700;color:var(--ink);outline:none" />
+        <span style="font-weight:700;color:var(--ink)">days before a use-by date</span>
+      </div>
+      <div class="sub" style="margin:6px 0 0">Uses your phone’s notifications; also nudges everyday staples about to run out. On iPhone, reminders mainly appear when you open the app.</div>
+    </div>
+    <div class="field">
+      <label>Predict run-outs for everyday staples</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--ink)">
+        <input type="checkbox" id="setPredict" /> Reorder them before they run out
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:9px">
+        <span style="font-weight:700;color:var(--ink)">add to the list</span>
+        <input type="number" id="setPredictLead" min="1" max="14" step="1" inputmode="numeric"
+          style="width:68px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:9px;font:inherit;font-weight:700;color:var(--ink);outline:none" />
+        <span style="font-weight:700;color:var(--ink)">days early</span>
+      </div>
+      <div class="sub" style="margin:6px 0 0">Mark an item “everyday staple” in its editor to include it.</div>
+    </div>
+    <div class="field">
+      <label>Dietary preferences (optional)</label>
+      <input type="text" id="setPrefs" placeholder="e.g. vegetarian, no nuts" autocomplete="off" />
+      <div class="sub" style="margin:6px 0 0">Used by the recipe-idea prompt.</div>
+    </div>
+    <div class="field">
+      <label>Default store per item</label>
+      <div id="itemDefaultsList"></div>
+    </div>
+    <div class="field">
+      <label>Backup</label>
+      <div style="display:flex;gap:6px">
+        <button class="btn sage" id="exportBtn" style="margin:0"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export backup</button>
+        <button class="btn" id="importBtn" style="margin:0;background:var(--cream-2);color:var(--terra-d)"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Restore</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none" />
+    </div>
+    <button class="btn primary" id="setSave">Save</button>
+    <button class="btn ghost" id="setCancel">Close</button>
+  </div>
+</div>
+
+<!-- First-run welcome -->
+<div class="overlay" id="welcomeOverlay">
+  <div class="sheet">
+    <h2>Welcome to Our Kitchen</h2>
+    <div class="sub">Your list is private to a <b>household code</b>. Keep the one below, or pick your own — then enter the <b>same code</b> on both phones to share one list.</div>
+    <div class="field">
+      <label>Your household code</label>
+      <input type="text" id="welcomeCode" autocomplete="off" />
+    </div>
+    <button class="btn primary" id="welcomeStart">Start</button>
+  </div>
+</div>
+
+<!-- Receipt review modal -->
+<div class="overlay" id="receiptOverlay">
+  <div class="sheet">
+    <h2 id="receiptTitle">Review your receipt</h2>
+    <div class="sub" id="receiptSub">Untick anything you don't want, fix a name or aisle if needed, then add.</div>
+    <div class="field">
+      <label>Add these to</label>
+      <div class="slots" id="receiptDest">
+        <button class="slot-pick on" data-dest="pantry"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="6" ry="2.4"/><path d="M6 6v12c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4V6"/><path d="M6 12c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4"/></svg>Pantry</button>
+        <button class="slot-pick" data-dest="shopping"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Shopping list</button>
+      </div>
+    </div>
+    <div class="field" id="receiptStoreField">
+      <label>Store (for price history)</label>
+      <select id="receiptStore"></select>
+    </div>
+    <div id="receiptList"></div>
+    <button class="btn primary" id="receiptConfirm">Add items</button>
+    <button class="btn ghost" id="receiptCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Paste AI recipes modal (copy-prompt workflow, no API) -->
+<div class="overlay" id="pasteRecipeOverlay">
+  <div class="sheet">
+    <h2>Paste AI recipes</h2>
+    <div class="sub">Paste the AI's whole reply here. I'll read the recipes from it and add them to your library. Readable text is fine — I pick up the JSON block at the end.</div>
+    <div class="field">
+      <textarea id="pasteRecipeText" rows="10" placeholder="Paste the AI's reply…"></textarea>
+    </div>
+    <button class="btn primary" id="pasteRecipeImport">Import recipes</button>
+    <button class="btn ghost" id="pasteRecipeCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Plan my week modal -->
+<div class="overlay" id="planOverlay">
+  <div class="sheet">
+    <h2>Plan my week</h2>
+    <div class="sub">Fills empty dinners from your saved meals — using up soon-to-expire stock first.</div>
+    <div class="field">
+      <label>Cooking style</label>
+      <div class="slots" id="planCadence">
+        <button class="slot-pick" data-cook="1">Cook daily</button>
+        <button class="slot-pick on" data-cook="2">Cook + leftovers</button>
+        <button class="slot-pick" data-cook="3">Batch cook</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Options</label>
+      <div class="slots" id="planOpts">
+        <button class="slot-pick" data-opt="veg" aria-pressed="false"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10Z"/><path d="M2 22c0-3 1.85-5.4 5.1-6"/></svg>Veggie only</button>
+        <button class="slot-pick" data-opt="quick" aria-pressed="false"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>Quick (≤30 min)</button>
+      </div>
+    </div>
+    <button class="btn primary" id="planGo">Plan dinners</button>
+    <button class="btn sage" id="planGoList">Plan + add shortfall to list</button>
+    <button class="btn ghost" id="planCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Recipe editor modal -->
+<div class="overlay" id="recipeOverlay">
+  <div class="sheet">
+    <h2 id="recipeTitle">Edit recipe</h2>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="recName" placeholder="e.g. Chicken curry" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>When</label>
+      <div class="slots" id="recSlots">
+        <button class="slot-pick" data-slot="breakfast">Breakfast</button>
+        <button class="slot-pick" data-slot="lunch">Lunch</button>
+        <button class="slot-pick on" data-slot="dinner">Dinner</button>
+        <button class="slot-pick" data-slot="snack">Snack</button>
+      </div>
+    </div>
+    <div class="field">
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <label>Cook time (min)</label>
+          <input type="number" id="recCook" min="0" step="5" inputmode="numeric" placeholder="e.g. 30" />
+        </div>
+        <div style="flex:1">
+          <label>Serves</label>
+          <input type="number" id="recServes" min="0" step="1" inputmode="numeric" placeholder="e.g. 4" />
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Ingredients</label>
+      <div id="recIngList"></div>
+      <button class="add-ing-btn" id="recAddIng">+ Add ingredient</button>
+    </div>
+    <div class="field">
+      <label>Steps</label>
+      <textarea id="recSteps" rows="5" placeholder="One step per line"></textarea>
+    </div>
+    <button class="btn primary" id="recSave">Save recipe</button>
+    <button class="btn sage" id="recToList"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Send ingredients to list</button>
+    <button class="btn danger" id="recDelete" style="display:none">Delete recipe</button>
+    <button class="btn ghost" id="recCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Aisle order (store walk-order) modal -->
+<div class="overlay" id="aisleOverlay">
+  <div class="sheet">
+    <h2 id="aisleTitle">Aisle order</h2>
+    <div class="sub">Put the aisles in the order you walk this store — the list will follow it. Use ↑ / ↓ to move each one.</div>
+    <div id="aisleList"></div>
+    <button class="btn primary" id="aisleSave">Save layout</button>
+    <button class="btn ghost" id="aisleReset">Reset to default order</button>
+    <button class="btn ghost" id="aisleCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Spend & price insights modal (#11) -->
+<div class="overlay" id="insightsOverlay">
+  <div class="sheet">
+    <h2>Spend &amp; prices</h2>
+    <div id="insightsBody"></div>
+    <button class="btn ghost" id="insightsCancel">Close</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your Firebase keys here to turn on live sync
+   between phones. Leave as-is to use the app on one device only.
+   Step-by-step guide is in SETUP-GUIDE.md
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCSIqtnvJ1459lWFRvpFTQ6NDQaIZ2kkp4",
+  authDomain: "our-kitchen-be03f.firebaseapp.com",
+  databaseURL: "https://our-kitchen-be03f-default-rtdb.firebaseio.com",
+  projectId: "our-kitchen-be03f",
+  storageBucket: "our-kitchen-be03f.firebasestorage.app",
+  messagingSenderId: "679361781274",
+  appId: "1:679361781274:web:97a2453419badcb0cb7ba3"
+};
+const FIREBASE_VERSION = "10.12.2";
+/* ============================================================ */
+
+/* ============================================================
+   RECEIPT SCANNING — paste your Cloudflare Worker URL between the
+   quotes to turn on the "Scan a receipt" button. Leave blank to
+   hide it. Step-by-step guide is in RECEIPT-SETUP.md
+   ============================================================ */
+const RECEIPT_WORKER_URL = "https://our-kitchen-receipt.budgeman101.workers.dev";
+/* ============================================================ */
+// The same Worker powers receipt scan (#8) and recipe import (#12). Trim any
+// stray whitespace/newline so fetch() always gets a clean URL.
+const WORKER_URL = (RECEIPT_WORKER_URL || "").trim();
+
+const CATEGORIES = [
+  {id:'produce',   name:'Produce'},
+  {id:'dairy',     name:'Dairy & Eggs'},
+  {id:'meat',      name:'Meat & Seafood'},
+  {id:'bakery',    name:'Bakery'},
+  {id:'frozen',    name:'Frozen'},
+  {id:'pantry',    name:'Pantry'},
+  {id:'beverages', name:'Beverages'},
+  {id:'snacks',    name:'Snacks'},
+  {id:'household', name:'Household'},
+  {id:'other',     name:'Other'},
+];
+const catMap = Object.fromEntries(CATEGORIES.map(c=>[c.id,c]));
+// Line-icon for each grocery category (used in cat headers, aisle editor, insights).
+function catIcon(id){
+  const W='<svg class="cat-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">', E='</svg>';
+  switch(id){
+    case 'produce':   return W+'<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10Z"/><path d="M2 22c0-3 1.85-5.4 5.1-6"/>'+E;
+    case 'dairy':     return W+'<path d="M9 2h6v3l1.2 2.4V20a2 2 0 0 1-2 2H9.8a2 2 0 0 1-2-2V7.4L9 5Z"/><line x1="8" y1="10" x2="16" y2="10"/>'+E;
+    case 'meat':      return W+'<path d="M3 12c3-5 8-7 13-6.5 0 0 4 .8 5 6.5-1 5.7-5 6.5-5 6.5C11 19 6 17 3 12Z"/><path d="M5 9.5c1.4 1.6 1.4 3.4 0 5"/><circle cx="16.5" cy="11" r="0.8" fill="currentColor"/>'+E;
+    case 'bakery':    return W+'<path d="M5 11c0-2.8 3.1-4.5 7-4.5s7 1.7 7 4.5c0 1-1 1.6-2 1.6V18a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-5.4c-1 0-2-.6-2-1.6Z"/><path d="M9.5 12.5 11 18M14.5 12.5 13 18"/>'+E;
+    case 'frozen':    return W+'<line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="4.5" y1="4.5" x2="19.5" y2="19.5"/><line x1="19.5" y1="4.5" x2="4.5" y2="19.5"/>'+E;
+    case 'pantry':    return W+'<ellipse cx="12" cy="6" rx="6" ry="2.4"/><path d="M6 6v12c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4V6"/><path d="M6 12c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4"/>'+E;
+    case 'beverages': return W+'<path d="M6 6h12l-1.1 13.2a1 1 0 0 1-1 .8H8.1a1 1 0 0 1-1-.8L6 6Z"/><line x1="5" y1="6" x2="19" y2="6"/><path d="M14.5 3l-1 3"/>'+E;
+    case 'snacks':    return W+'<circle cx="12" cy="12" r="9"/><circle cx="9.5" cy="9.5" r="1" fill="currentColor"/><circle cx="14.5" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="14.5" r="1" fill="currentColor"/><circle cx="9.5" cy="15" r="1" fill="currentColor"/>'+E;
+    case 'household': return W+'<path d="M9 9h5l2 3v8a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-8Z"/><path d="M9 9V6h4V4h-2"/><line x1="14" y1="6" x2="17" y2="6"/>'+E;
+    default:          return W+'<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor"/>'+E;
+  }
+}
+// Large line-icon for empty states.
+function bigIcon(k){
+  const W='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">', E='</svg>';
+  if(k==='search')  return W+'<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'+E;
+  if(k==='can')     return W+'<ellipse cx="12" cy="6" rx="6" ry="2.4"/><path d="M6 6v12c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4V6"/><path d="M6 12c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4"/>'+E;
+  if(k==='pot')     return W+'<path d="M4 9h16v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Z"/><line x1="2" y1="9" x2="22" y2="9"/><path d="M4 12H2M22 12h-2"/><path d="M9 6V4M13 6V4M17 6V4"/>'+E;
+  if(k==='receipt') return W+'<path d="M5 3v18l2-1.2 2 1.2 2-1.2 2 1.2 2-1.2 2 1.2V3l-2 1.2-2-1.2-2 1.2-2-1.2-2 1.2L5 3Z"/><path d="M9 8h6M9 12h6"/>'+E;
+  return W+'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>'+E;
+}
+
+// #10 — per-store aisle order. state.storeAisleOrder[storeName] = {order:[catId,…], updatedAt, deleted?}.
+// Lets the shopping list read top-to-bottom in the order you actually walk a store.
+function normStoreOrder(o){
+  if(!o || typeof o!=='object' || Array.isArray(o)) return {};
+  const out={};
+  for(const k of Object.keys(o)){
+    const e=o[k]; if(!e || typeof e!=='object' || gcExpired(e)) continue;
+    out[k]={ order:(Array.isArray(e.order)?e.order.filter(id=>catMap[id]):[]), updatedAt:Number(e.updatedAt)||0, ...(e.deleted?{deleted:true}:{}) };
+  }
+  return out;
+}
+function mergeStoreOrder(a,b){
+  a=a||{}; b=b||{}; const out={};
+  for(const k of new Set([...Object.keys(a),...Object.keys(b)])){
+    const x=a[k], y=b[k];
+    const pick = !x?y : !y?x : ((y.updatedAt||0)>=(x.updatedAt||0)?y:x);
+    if(pick && !gcExpired(pick)) out[k]=pick;
+  }
+  return out;
+}
+// The aisle order to use for a store: its saved order first (valid cats only),
+// then any remaining categories, falling back to the default CATEGORIES order.
+function aisleOrderFor(store){
+  const rec=(state.storeAisleOrder||{})[store];
+  const saved=(rec && !rec.deleted && Array.isArray(rec.order)) ? rec.order.filter(id=>catMap[id]) : [];
+  const rest=CATEGORIES.map(c=>c.id).filter(id=>!saved.includes(id));
+  return [...saved, ...rest];
+}
+
+// #4 — common item → aisle dictionary. First-time adds of a known staple land in
+// the right aisle instead of "Other". Per-item memory (itemDefaults) still wins.
+const COMMON_AISLES = {
+  // produce
+  apple:'produce', banana:'produce', tomato:'produce', onion:'produce', potato:'produce', carrot:'produce',
+  lettuce:'produce', spinach:'produce', broccoli:'produce', cauliflower:'produce', cucumber:'produce',
+  pepper:'produce', capsicum:'produce', garlic:'produce', lemon:'produce', lime:'produce', avocado:'produce',
+  mushroom:'produce', celery:'produce', cabbage:'produce', zucchini:'produce', courgette:'produce', kale:'produce',
+  parsley:'produce', cilantro:'produce', coriander:'produce', ginger:'produce', grape:'produce', strawberry:'produce',
+  blueberry:'produce', raspberry:'produce', orange:'produce', apples:'produce', berries:'produce', salad:'produce',
+  // dairy & eggs
+  milk:'dairy', egg:'dairy', butter:'dairy', cheese:'dairy', yogurt:'dairy', yoghurt:'dairy', cream:'dairy',
+  feta:'dairy', mozzarella:'dairy', parmesan:'dairy', margarine:'dairy',
+  // meat & seafood
+  chicken:'meat', beef:'meat', pork:'meat', bacon:'meat', sausage:'meat', mince:'meat', turkey:'meat',
+  ham:'meat', salmon:'meat', tuna:'meat', fish:'meat', shrimp:'meat', prawn:'meat', steak:'meat', lamb:'meat',
+  // bakery
+  bread:'bakery', bagel:'bakery', baguette:'bakery', croissant:'bakery', tortilla:'bakery', bun:'bakery',
+  roll:'bakery', muffin:'bakery', pita:'bakery', naan:'bakery',
+  // frozen
+  'ice cream':'frozen', 'frozen peas':'frozen', 'frozen pizza':'frozen', fries:'frozen',
+  // pantry
+  rice:'pantry', pasta:'pantry', spaghetti:'pantry', noodle:'pantry', flour:'pantry', sugar:'pantry', salt:'pantry',
+  oil:'pantry', vinegar:'pantry', bean:'pantry', lentil:'pantry', chickpea:'pantry', cereal:'pantry', oat:'pantry',
+  honey:'pantry', jam:'pantry', ketchup:'pantry', mustard:'pantry', mayo:'pantry', mayonnaise:'pantry',
+  'soy sauce':'pantry', stock:'pantry', broth:'pantry', 'peanut butter':'pantry', sauce:'pantry', spice:'pantry',
+  // beverages
+  water:'beverages', juice:'beverages', soda:'beverages', cola:'beverages', beer:'beverages', wine:'beverages',
+  coffee:'beverages', tea:'beverages',
+  // snacks
+  chip:'snacks', crisp:'snacks', cracker:'snacks', cookie:'snacks', biscuit:'snacks', chocolate:'snacks',
+  candy:'snacks', popcorn:'snacks', pretzel:'snacks', nut:'snacks',
+  // household
+  'toilet paper':'household', 'paper towel':'household', 'dish soap':'household', detergent:'household',
+  soap:'household', shampoo:'household', toothpaste:'household', sponge:'household', 'trash bag':'household',
+  'bin bag':'household', foil:'household', 'cling film':'household', napkin:'household', tissue:'household',
+};
+// Candidate singular forms of a word (handles -ies, -es, -s plurals).
+function singulars(w){
+  const out=[w];
+  if(/ies$/.test(w)) out.push(w.replace(/ies$/,'y'));
+  if(/es$/.test(w)) out.push(w.replace(/es$/,''));
+  if(/s$/.test(w))  out.push(w.replace(/s$/,''));
+  return out;
+}
+// Guess an aisle for an item name: exact, de-pluralised, then word-by-word (last word first).
+function guessCat(name){
+  const n=String(name||'').trim().toLowerCase();
+  if(!n) return null;
+  for(const cand of singulars(n)){ if(COMMON_AISLES[cand]) return COMMON_AISLES[cand]; }
+  const toks=n.split(/\s+/);
+  for(let i=toks.length-1;i>=0;i--){
+    for(const cand of singulars(toks[i])){ if(COMMON_AISLES[cand]) return COMMON_AISLES[cand]; }
+  }
+  return null;
+}
+
+// #1 — conservative veg shelf-lives (average home / not-optimal storage), in days.
+// Deliberately on the short side so we warn early rather than late.
+const DAY_MS = 86400000;
+const VEG_SHELF_LIFE = [
+  {days:3,  names:['lettuce','spinach','herb','herbs','basil','cilantro','coriander','parsley','arugula','rocket','kale','salad','greens','mint','chard','watercress','dill','spring greens']},
+  {days:4,  names:['broccoli','cauliflower','green bean','green beans','bean sprout','bean sprouts','asparagus','mushroom','brussels sprout','brussels sprouts','spring onion','green onion','scallion','sweetcorn','corn','okra','snap pea','snap peas','mangetout']},
+  {days:5,  names:['cucumber','zucchini','courgette','pepper','capsicum','bell pepper','tomato','eggplant','aubergine','avocado','pea','peas','chili','chilli','chillies','green pea','green peas']},
+  {days:11, names:['carrot','celery','cabbage','beet','beetroot','radish','turnip','leek','fennel','parsnip','swede','kohlrabi']},
+  {days:24, names:['onion','potato','garlic','squash','pumpkin','sweet potato','ginger','shallot','butternut','swede potato']},
+];
+const VEG_DAYS = (()=>{ const m={}; VEG_SHELF_LIFE.forEach(g=>g.names.forEach(n=>{ m[n]=g.days; })); return m; })();
+// Shelf-life in days for a name (exact / de-pluralised / word-by-word), or null if not tracked.
+function vegShelfLife(name){
+  const n=String(name||'').trim().toLowerCase(); if(!n) return null;
+  for(const c of singulars(n)){ if(VEG_DAYS[c]!=null) return VEG_DAYS[c]; }
+  const toks=n.split(/\s+/);
+  for(let i=toks.length-1;i>=0;i--){ for(const c of singulars(toks[i])){ if(VEG_DAYS[c]!=null) return VEG_DAYS[c]; } }
+  return null;
+}
+// Whole calendar days until a pantry item's use-by (0 = today, negative = past it);
+// null if no expiry set. Calendar-based so "due today" reads as 0, not a fraction.
+function daysLeft(p){
+  if(!p || !p.expiresAt) return null;
+  const exp=new Date(p.expiresAt); exp.setHours(0,0,0,0);
+  const today=new Date(); today.setHours(0,0,0,0);
+  return Math.round((exp - today)/DAY_MS);
+}
+// A freshness pill, shown only within ~2 days of expiry (or once expired).
+function freshPill(p){
+  const d=daysLeft(p); if(d==null || d>2) return '';
+  const cls = d<=0 ? 'f-exp' : 'f-soon';
+  const txt = d<0 ? 'Expired' : (d===0 ? 'Use today' : `${d}d left`);
+  return `<span class="fresh-pill ${cls}" title="Best used by ${esc(iso(new Date(p.expiresAt)))}">${txt}</span>`;
+}
+// Stamp addedAt + a computed expiresAt onto any tracked veg that doesn't have one
+// yet (new adds, receipt items, or pantry from before this feature). Returns true
+// if anything changed so the caller can persist. A manual date or cleared date
+// (expiresAt already set) is left alone.
+function seedExpiry(){
+  let changed=false;
+  live(state.pantry).forEach(p=>{
+    if(p.expiresAt) return;
+    const days=vegShelfLife(p.name);
+    if(days==null) return;
+    if(!p.addedAt) p.addedAt=now();
+    p.expiresAt=p.addedAt + days*DAY_MS;
+    touch(p);
+    changed=true;
+  });
+  return changed;
+}
+
+/* #14 — run-out prediction. Learn how fast everyday staples are used and reorder
+   them a few days before they hit zero, instead of waiting for the low line.
+   All learning rides on the pantry item: burnRate (units/day, smoothed), rateN
+   (samples seen), lastSeen{Qty,At} (baseline), lastRestockAt + restockGap. */
+function ema(prev,val){ return (prev>0) ? (prev*0.6 + val*0.4) : val; }
+const SAMPLE_MIN_DAYS = 0.5;   // ignore deltas closer than this so rapid taps don't skew the rate
+// Sample consumption (qty going down) and restock cadence (qty going up). Run on
+// local changes (commit). Baseline only advances when we actually take a sample,
+// so consumption that happens in small bursts still accumulates.
+function learnUsage(){
+  const t=now();
+  live(state.pantry).forEach(p=>{
+    const q=Number(p.qty)||0;
+    if(p.lastSeenAt==null){ p.lastSeenAt=t; p.lastSeenQty=q; return; }
+    if(q > (p.lastSeenQty||0)){                                  // restock / manual increase
+      if(p.lastRestockAt){ const gap=(t-p.lastRestockAt)/DAY_MS; if(gap>=SAMPLE_MIN_DAYS) p.restockGap=ema(p.restockGap,gap); }
+      p.lastRestockAt=t; p.lastSeenQty=q; p.lastSeenAt=t; touch(p);
+    } else if(q < (p.lastSeenQty||0)){                           // consumption
+      const dtDays=(t-p.lastSeenAt)/DAY_MS;
+      if(dtDays>=SAMPLE_MIN_DAYS){
+        const rate=((p.lastSeenQty||0)-q)/dtDays;
+        if(rate>0 && isFinite(rate)){ p.burnRate=ema(p.burnRate,rate); p.rateN=(p.rateN||0)+1; }
+        p.lastSeenQty=q; p.lastSeenAt=t; touch(p);
+      }                                                          // else keep baseline; let it accumulate
+    }
+  });
+}
+// Estimated days until an item runs out: learned rate → manual days-per-pack →
+// restock cadence. null when we have no basis to predict yet.
+function predictedDaysLeft(p){
+  const qty=Number(p.qty)||0;
+  if(p.burnRate>0 && (p.rateN||0)>=2) return qty/p.burnRate;
+  const full=Number(p.full)||0;
+  if(p.daysPerPack>0 && full>0) return (qty/full)*p.daysPerPack;
+  if(p.restockGap>0 && p.lastRestockAt) return p.restockGap - (Date.now()-p.lastRestockAt)/DAY_MS;
+  return null;
+}
+// A muted "~Nd left" pill on everyday staples (turns red within the lead window).
+function predPill(p){
+  if(!p || !p.everyday) return '';
+  const dl=predictedDaysLeft(p); if(dl==null) return '';
+  const d=Math.max(0,Math.round(dl));
+  const lead=state.predictLead>0?state.predictLead:3;
+  return `<span class="pred-pill ${d<=lead?'pr-soon':'pr-ok'}" title="Estimated days until you run out">~${d}d</span>`;
+}
+// Predictive layer over sweepAutoList: for everyday staples, add to the list once
+// they're within `predictLead` days of running out. Re-arms when a restock pushes
+// the date back out. Skips items already handled by the percentage sweep.
+function sweepPredict(){
+  if(state.autoList===false || state.predict===false) return 0;
+  const lead=state.predictLead>0?state.predictLead:3;
+  let added=0;
+  live(state.pantry).forEach(p=>{
+    if(!p.everyday) return;
+    const dl=predictedDaysLeft(p);
+    const due = dl!=null && dl<=lead;
+    if(due && !p.predListed){
+      p.predListed=true; touch(p);
+      if(!onShoppingList(p.name) && !almostGone(p)){
+        const full=Number(p.full)||0, step=unitStep(p.unit);
+        let refill=round3(full-(Number(p.qty)||0)); if(!(refill>0)||refill<step) refill=step;
+        addToShopping(p.name, refill, p.cat, p.unit||'each');
+        const li=state.shopping.find(i=>!i.deleted && !i.checked && i.name.toLowerCase()===p.name.toLowerCase());
+        if(li){ li.auto=true; touch(li); }
+        added++;
+      }
+    } else if(!due && p.predListed){
+      p.predListed=false; touch(p);
+    }
+  });
+  return added;
+}
+
+const SLOTS = {breakfast:'Breakfast',lunch:'Lunch',dinner:'Dinner',snack:'Snack'};
+// Units: 'each' is a plain count; g/kg are a mass family, ml/L a volume family.
+const UNITS = [
+  {id:'each',  label:'each',   step:1},
+  {id:'pieces',label:'pieces', step:1},
+  {id:'g',     label:'g',      step:50},
+  {id:'kg',    label:'kg',     step:0.5},
+  {id:'ml',    label:'ml',     step:100},
+  {id:'L',     label:'L',      step:0.5},
+  {id:'pack',  label:'pack',   step:1},
+  {id:'bag',   label:'bag',    step:1},
+  {id:'box',   label:'box',    step:1},
+  {id:'can',   label:'can',    step:1},
+  {id:'bottle',label:'bottle', step:1},
+  {id:'bunch', label:'bunch',  step:1},
+  {id:'dozen', label:'dozen',  step:1},
+];
+const UNIT_FAMILY = {g:'mass', kg:'mass', ml:'vol', L:'vol'};
+const UNIT_TOBASE = {g:1, kg:1000, ml:1, L:1000};   // amount × factor = base (grams / millilitres)
+const UNIT_STEP   = Object.fromEntries(UNITS.map(u=>[u.id,u.step]));
+
+/* ---------- PACK SIZES (buy-in-packs) ----------
+   A "pack" lets you add a familiar count (2 milks) while the app stores the real
+   measured amount (8 L) so the % system can track it down to a re-order. Each
+   profile is { per, unit }: one of these = `per` `unit`. Built-in defaults below;
+   per-item overrides live in state.packs (set in the pantry editor, or learned
+   from scanned receipts). */
+const PACK_DEFAULTS = {
+  milk:    {per:4,   unit:'L'},        // 1 = 4 L  → add 2 = 8 L
+  egg:     {per:24,  unit:'pieces'},   // 1 = 2 dozen = 24 pieces
+  eggs:    {per:24,  unit:'pieces'},
+  rice:    {per:5,   unit:'kg'},
+  pasta:   {per:500, unit:'g'},
+  chicken: {per:1,   unit:'kg'},
+  bread:   {per:1,   unit:'each'},     // 1 loaf
+  water:   {per:12,  unit:'bottle'},   // 12 pack
+};
+// The pack profile for an item name: a user/learned override wins over the
+// built-in default; a `deleted` override turns the default off. null = no pack.
+function packFor(name){
+  const n=String(name||'').trim().toLowerCase(); if(!n) return null;
+  const ov=(state.packs||{})[n];
+  if(ov){ if(ov.deleted) return null; const per=Number(ov.per)||0; if(per>0) return {per, unit:ov.unit||'each'}; }
+  const d=PACK_DEFAULTS[n];
+  return d ? {per:d.per, unit:d.unit} : null;
+}
+// One "buy unit" of an item. When the caller left the unit at the default, a
+// pack profile expands it into the real measure (e.g. milk → 4 L). A unit the
+// user picked on purpose is respected as-is (recipes stay literal).
+function buyUnit(name, unit){
+  unit=unit||'each';
+  const pk = packFor(name);
+  // Expand to a pack when the unit is the default, or already the pack's own
+  // unit (the add bar shows e.g. "L" for milk). A different unit the user picked
+  // on purpose (e.g. kg) is left literal.
+  if(pk && (unit==='each' || unit===pk.unit)) return {qty:pk.per, unit:pk.unit, pack:pk.per};
+  return {qty:1, unit};
+}
+// Learn/refine a pack size from a real measured purchase (e.g. a scanned
+// receipt line "Milk 4 L"). Count units (each/pieces) are ignored so plain
+// "x2" lines don't pollute the size; a couple of agreeing samples set it.
+function learnPack(name, qty, unit){
+  name=String(name||'').trim().toLowerCase(); if(!name) return;
+  qty=Number(qty)||0; unit=unit||'each';
+  if(qty<=0 || isCountUnit(unit)) return;        // only measured (g/kg/ml/L) refine
+  state.packs=state.packs||{};
+  const cur=state.packs[name]||{};
+  if(cur.src==='user') return;                   // never override a size you set yourself
+  const samples=(Array.isArray(cur.samples)?cur.samples:[]).concat([{q:qty,u:unit}]).slice(-6);
+  const counts={}; samples.forEach(s=>{counts[s.u]=(counts[s.u]||0)+1;});
+  const domUnit=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+  const sizes=samples.filter(s=>s.u===domUnit).map(s=>s.q).sort((a,b)=>a-b);
+  const next={...cur, samples, updatedAt:now()};
+  if(sizes.length>=2){                            // enough agreement → set learned pack
+    next.per=sizes[Math.floor(sizes.length/2)];  // median size
+    next.unit=domUnit; next.src='receipt'; next.deleted=false;
+  }
+  state.packs[name]=next;
+}
+// Tidy a state.packs map coming off disk / the network.
+function normPacks(o){
+  if(!o || typeof o!=='object' || Array.isArray(o)) return {};
+  const out={};
+  for(const k of Object.keys(o)){
+    const e=o[k]; if(!e || typeof e!=='object') continue;
+    out[k]={ per:Number(e.per)||0, unit:(typeof e.unit==='string'?e.unit:'each'),
+      updatedAt:Number(e.updatedAt)||0, ...(e.src?{src:e.src}:{}), ...(e.deleted?{deleted:true}:{}),
+      ...(Array.isArray(e.samples)?{samples:e.samples.slice(-6)}:{}) };
+  }
+  return out;
+}
+function mergePacks(a,b){
+  a=a||{}; b=b||{}; const out={};
+  for(const k of new Set([...Object.keys(a),...Object.keys(b)])){
+    const x=a[k], y=b[k];
+    out[k] = !x?y : !y?x : ((y.updatedAt||0)>=(x.updatedAt||0)?y:x);
+  }
+  return out;
+}
+
+const cloudOn = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('PASTE');
+
+/* ---------- tiny helpers ---------- */
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const uid = ()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const esc = s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function iso(d){const x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+function startOfWeek(d){const x=new Date(d);const diff=(x.getDay()+6)%7;x.setDate(x.getDate()-diff);x.setHours(0,0,0,0);return x;}
+const DAY_NAMES=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtShort=d=>MON[d.getMonth()]+' '+d.getDate();
+
+/* ---------- units ---------- */
+function round3(n){ return Math.round((n+Number.EPSILON)*1000)/1000; }
+function unitStep(u){ return UNIT_STEP[u||'each']||1; }
+function fmtQty(amt,unit){
+  unit=unit||'each';
+  amt=Math.round((amt||0)*100)/100;
+  return unit==='each' ? String(amt) : `${amt} ${unit}`;
+}
+// Display for a row's quantity. Packed items read as "count (measure)" — e.g.
+// "2 (8 L)" — so you see the familiar count and the real backend amount. When
+// the count and the measure would read the same (plain each), just show one.
+function fmtPacked(i){
+  const per=Number(i&&i.pack)||0;
+  if(per>0){
+    const count=round3((Number(i.qty)||0)/per);
+    const measure=fmtQty(i.qty,i.unit);
+    return measure===String(count) ? measure : `${count} (${measure})`;
+  }
+  return fmtQty(i.qty,i.unit);
+}
+function unitOptions(sel){
+  sel=sel||'each';
+  return UNITS.map(u=>`<option value="${u.id}"${u.id===sel?' selected':''}>${u.label}</option>`).join('');
+}
+function fillUnitSelect(s){ if(s) s.innerHTML=unitOptions('each'); }
+// convert an amount from one unit to another; null if the units aren't comparable
+function convertAmount(amt,from,to){
+  from=from||'each'; to=to||'each';
+  if(from===to) return amt;
+  const ff=UNIT_FAMILY[from], tf=UNIT_FAMILY[to];
+  if(ff && ff===tf) return amt*UNIT_TOBASE[from]/UNIT_TOBASE[to];
+  return null;
+}
+// take `need` (in needUnit) from `have` (in haveUnit). Returns null if incompatible.
+function deduct(haveAmt,haveUnit,needAmt,needUnit){
+  haveUnit=haveUnit||'each'; needUnit=needUnit||'each';
+  const needInHave=convertAmount(needAmt,needUnit,haveUnit);
+  if(needInHave==null) return null;
+  const take=Math.min(haveAmt,needInHave);
+  const shortInHave=needInHave-take;
+  return { newHave:round3(haveAmt-take), shortfall:round3(convertAmount(shortInHave,haveUnit,needUnit)), took:take>0 };
+}
+
+// toast(msg) for a plain message, or toast(msg,{undo:fn}) to show an Undo button.
+function toast(msg,opts){
+  const t=$('#toast');
+  if(opts && typeof opts.undo==='function'){
+    t.innerHTML='<span class="toast-msg"></span><button type="button" class="toast-undo">Undo</button>';
+    $('.toast-msg',t).textContent=msg;
+    $('.toast-undo',t).onclick=()=>{ t.classList.remove('show'); clearTimeout(t._t); opts.undo(); };
+  }else{
+    t.textContent=msg;
+  }
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t=setTimeout(()=>t.classList.remove('show'), (opts&&opts.undo)?5500:1900);
+}
+
+/* ---------- state ---------- */
+let state = {shopping:[], pantry:[], meals:{}, stores:[], itemDefaults:{}, recipes:[], staples:[], storeAisleOrder:{}, packs:{}, purchases:[], autoRestock:true, autoRestockAt:0, autoList:true, autoListPct:0.10, autoListAt:0, prefs:'', prefsAt:0, predict:true, predictLead:3, predictAt:0, notify:false, notifyLead:2, notifyAt:0};
+let activeView = 'shopping';
+let weekStart = startOfWeek(new Date());
+// On first run, start on a PRIVATE random code (not a shared default) so two
+// installs never accidentally land on the same public list. The welcome card
+// lets you keep it or set a shared code you both type in.
+let household = localStorage.getItem('grocery::household');
+let isFirstRun = false;
+if(!household){
+  isFirstRun = true;
+  household = 'kitchen-' + Math.random().toString(36).slice(2,8);
+  localStorage.setItem('grocery::household', household);
+}
+let firstLoad = true;
+let sticky = loadSticky();   // device-local last-used {store,cat} for the add bar
+let pickerTouched = false;   // did the user override the add-bar pickers for the current entry?
+function loadSticky(){ try{return JSON.parse(localStorage.getItem('grocery::sticky'))||{};}catch(e){return {};} }
+function saveSticky(){ try{localStorage.setItem('grocery::sticky', JSON.stringify(sticky));}catch(e){} }
+
+/* ---------- sync model: timestamps, tombstones & merge ----------
+   Every item carries an `updatedAt`. Deletes set `deleted:true` (a tombstone)
+   instead of dropping the row, so a delete on one phone still reaches the
+   other. Saves run in a transaction that merges remote+local per item by
+   newest `updatedAt`, so simultaneous edits on two phones no longer clobber
+   each other. Old tombstones are garbage-collected after a week. */
+const TOMB_TTL = 7*24*60*60*1000;
+const now = ()=>Date.now();
+const live = arr => (arr||[]).filter(i=>i && !i.deleted);
+function touch(o){ if(o){ o.updatedAt=now(); o.deleted=false; } return o; }
+function tomb(o){ if(o){ o.deleted=true; o.updatedAt=now(); } return o; }
+function gcExpired(x){ return x && x.deleted && (now()-(x.updatedAt||0))>TOMB_TTL; }
+function gcArr(arr){ return (arr||[]).filter(x=>x && !gcExpired(x)); }
+function gcMeals(m){
+  if(!m || typeof m!=='object' || Array.isArray(m)) return {};
+  const out={}; for(const k of Object.keys(m)){ const a=gcArr(m[k]); if(a.length) out[k]=a; } return out;
+}
+function gcDefaults(o){
+  if(!o || typeof o!=='object' || Array.isArray(o)) return {};
+  const out={}; for(const k of Object.keys(o)){ if(!gcExpired(o[k])) out[k]=o[k]; } return out;
+}
+
+function normalize(d){
+  d = d || {};
+  const pantry = gcArr(Array.isArray(d.pantry)?d.pantry:[]);
+  // Each pantry item carries a `full` reference (its fresh/100% amount) used for
+  // the 10% auto-list. Seed it from the current qty so the feature has a baseline,
+  // then it grows automatically as stock is added (see bumpFull).
+  pantry.forEach(p=>{ if(p){ const q=Number(p.qty)||0; p.full=Math.max(Number(p.full)||0, q); } });
+  return {
+    shopping: gcArr(Array.isArray(d.shopping)?d.shopping:[]),
+    pantry:   pantry,
+    meals:    gcMeals(d.meals),
+    stores:   Array.isArray(d.stores)?d.stores.filter(s=>typeof s==='string'):[],
+    itemDefaults: gcDefaults(d.itemDefaults),
+    recipes:  gcArr(Array.isArray(d.recipes)?d.recipes:[]),
+    staples:  gcArr(Array.isArray(d.staples)?d.staples:[]),
+    storeAisleOrder: normStoreOrder(d.storeAisleOrder),
+    packs:    normPacks(d.packs),
+    purchases: gcArr(Array.isArray(d.purchases)?d.purchases:[]),
+    autoRestock: d.autoRestock!==false,
+    autoRestockAt: Number(d.autoRestockAt)||0,
+    autoList: d.autoList!==false,
+    autoListPct: (Number(d.autoListPct)>0 && Number(d.autoListPct)<=1)?Number(d.autoListPct):0.10,
+    autoListAt: Number(d.autoListAt)||0,
+    prefs: typeof d.prefs==='string'?d.prefs:'',
+    prefsAt: Number(d.prefsAt)||0,
+    predict: d.predict!==false,
+    predictLead: Number(d.predictLead)>0?Number(d.predictLead):3,
+    predictAt: Number(d.predictAt)||0,
+    notify: d.notify===true,
+    notifyLead: Number(d.notifyLead)>0?Number(d.notifyLead):2,
+    notifyAt: Number(d.notifyAt)||0
+  };
+}
+
+// Merge two item arrays by id, keeping whichever copy has the newest updatedAt.
+function mergeItems(a,b){
+  const map=new Map();
+  const put=x=>{ if(!x||x.id==null) return; const cur=map.get(x.id);
+    if(!cur || (x.updatedAt||0) >= (cur.updatedAt||0)) map.set(x.id,x); };
+  (a||[]).forEach(put); (b||[]).forEach(put);
+  return [...map.values()].filter(x=>!gcExpired(x));
+}
+function mergeStores(a,b){
+  const seen=new Set(), out=[];
+  for(const s of [...(a||[]),...(b||[])]){ if(typeof s!=='string') continue;
+    const k=s.toLowerCase(); if(seen.has(k)) continue; seen.add(k); out.push(s); }
+  return out;
+}
+function mergeDefaults(a,b){
+  a=a||{}; b=b||{}; const out={};
+  for(const k of new Set([...Object.keys(a),...Object.keys(b)])){
+    const x=a[k], y=b[k];
+    const pick = !x?y : !y?x : ((y.updatedAt||0)>=(x.updatedAt||0)?y:x);
+    if(pick && !gcExpired(pick)) out[k]=pick;
+  }
+  return out;
+}
+function mergeMeals(a,b){
+  a=a||{}; b=b||{}; const out={};
+  for(const k of new Set([...Object.keys(a),...Object.keys(b)])){
+    const m=mergeItems(a[k],b[k]); if(m.length) out[k]=m;
+  }
+  return out;
+}
+// Combine the remote copy with our local copy without losing either side's edits.
+function mergeStates(remote, local){
+  const r=normalize(remote), l=normalize(local);
+  return {
+    shopping: mergeItems(r.shopping, l.shopping),
+    pantry:   mergeItems(r.pantry, l.pantry),
+    meals:    mergeMeals(r.meals, l.meals),
+    stores:   mergeStores(r.stores, l.stores),
+    itemDefaults: mergeDefaults(r.itemDefaults, l.itemDefaults),
+    recipes:  mergeItems(r.recipes, l.recipes),
+    staples:  mergeItems(r.staples, l.staples),
+    storeAisleOrder: mergeStoreOrder(r.storeAisleOrder, l.storeAisleOrder),
+    packs:    mergePacks(r.packs, l.packs),
+    purchases: mergeItems(r.purchases, l.purchases),
+    autoRestock: (l.autoRestockAt>=r.autoRestockAt) ? l.autoRestock : r.autoRestock,
+    autoRestockAt: Math.max(r.autoRestockAt, l.autoRestockAt),
+    autoList:    (l.autoListAt>=r.autoListAt) ? l.autoList : r.autoList,
+    autoListPct: (l.autoListAt>=r.autoListAt) ? l.autoListPct : r.autoListPct,
+    autoListAt:  Math.max(r.autoListAt, l.autoListAt),
+    prefs:   (l.prefsAt>=r.prefsAt) ? l.prefs : r.prefs,
+    prefsAt: Math.max(r.prefsAt, l.prefsAt),
+    predict:     (l.predictAt>=r.predictAt) ? l.predict : r.predict,
+    predictLead: (l.predictAt>=r.predictAt) ? l.predictLead : r.predictLead,
+    predictAt:   Math.max(r.predictAt, l.predictAt),
+    notify:     (l.notifyAt>=r.notifyAt) ? l.notify : r.notify,
+    notifyLead: (l.notifyAt>=r.notifyAt) ? l.notifyLead : r.notifyLead,
+    notifyAt:   Math.max(r.notifyAt, l.notifyAt)
+  };
+}
+// Firestore rejects `undefined`; round-trip drops any such fields.
+const clean = o => JSON.parse(JSON.stringify(o));
+
+/* ---------- data layer (cloud or local) ---------- */
+const DB = {
+  mode:'local', ref:null, _set:null, _onSnap:null, _db:null, _tx:null, _pending:null, _saveT:null,
+  async init(){
+    if(cloudOn){
+      try{
+        const appMod = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`);
+        const fs = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`);
+        const app = appMod.initializeApp(firebaseConfig);
+        const db = fs.getFirestore(app);
+        // Offline cache: queued writes sync when the connection returns (e.g. leaving a store).
+        if(fs.enableIndexedDbPersistence){ try{ await fs.enableIndexedDbPersistence(db); }catch(e){} }
+        this._db = db;
+        this.ref = fs.doc(db,'households',household);
+        this.inboxRef = fs.collection(db,'households',household,'inbox');   // Siri/Shortcuts drop-box
+        this._set = fs.setDoc; this._onSnap = fs.onSnapshot; this._del = fs.deleteDoc; this._tx = fs.runTransaction;
+        this.mode='cloud';
+      }catch(e){ console.error('Cloud sync failed, using this device only:',e); this.mode='local'; }
+    }
+  },
+  subscribe(cb){
+    if(this.mode==='cloud'){
+      this._onSnap(this.ref, snap=>cb(snap.exists()?snap.data():null),
+        err=>{console.error('snapshot error',err); cb(loadLocal());});
+    }else{
+      cb(loadLocal());
+    }
+  },
+  // Debounced so a flurry of +/- taps becomes one synced write.
+  save(s){
+    if(this.mode==='cloud'){
+      this._pending=s;
+      clearTimeout(this._saveT);
+      this._saveT=setTimeout(()=>this._flush(), 350);
+    }else{
+      saveLocal(s);
+    }
+  },
+  async _flush(){
+    if(this.mode!=='cloud') return;
+    const local=this._pending; this._pending=null;
+    if(!local) return;
+    saveLocal(local);   // mirror locally as a backstop
+    if(navigator.onLine===false){
+      // Offline: queue a plain write (persistence syncs it later). onSnapshot echoes it locally.
+      try{ this._set(this.ref, clean(local)); }catch(e){ console.error('offline queue failed',e); }
+      return;
+    }
+    try{
+      await this._tx(this._db, async tx=>{
+        const snap=await tx.get(this.ref);
+        const merged=mergeStates(snap.exists()?snap.data():null, local);
+        tx.set(this.ref, clean(merged));
+      });
+    }catch(e){
+      console.error('merge save failed, queuing plain write',e);
+      try{ this._set(this.ref, clean(local)); }catch(_){ saveLocal(local); }
+    }
+  },
+  // Replace everything (used by "restore backup"); bypasses the per-item merge.
+  async overwrite(s){
+    if(this.mode==='cloud'){
+      try{ await this._set(this.ref, clean(s)); }
+      catch(e){ console.error('overwrite failed',e); saveLocal(s); }
+    }else{
+      saveLocal(s);
+    }
+  },
+  // Watch the Siri/Shortcuts inbox. Each new doc is handed off to be added
+  // to the list, then deleted so it isn't processed again. Starts once.
+  watchInbox(onItem){
+    if(this.mode!=='cloud' || !this.inboxRef || this._inboxOn) return;
+    this._inboxOn = true;
+    this._onSnap(this.inboxRef, snap=>{
+      snap.docChanges().forEach(ch=>{
+        if(ch.type!=='added') return;
+        try{ onItem(ch.doc.data()||{}); }catch(e){ console.error('inbox item failed',e); }
+        this._del(ch.doc.ref).catch(err=>console.error('inbox cleanup failed',err));
+      });
+    }, err=>console.error('inbox watch error',err));
+  }
+};
+const lkey = ()=>'grocery::data::'+household;
+function loadLocal(){ try{return JSON.parse(localStorage.getItem(lkey()))||null;}catch(e){return null;} }
+function saveLocal(s){ localStorage.setItem(lkey(), JSON.stringify(s)); }
+
+function commit(){
+  seedExpiry();
+  learnUsage();
+  const added=sweepAutoList();
+  const predicted=sweepPredict();
+  renderActive();
+  updateBadges();
+  DB.save(state);
+  if(added) toast(added>1?`${added} items almost gone — added to your list`:`Almost gone — added to your list`);
+  else if(predicted) toast(predicted>1?`${predicted} staples running low soon — added ahead`:`Running low soon — added to your list ahead of time`);
+}
+function applyRemote(data){
+  state = normalize(data);
+  const seeded=seedExpiry();            // stamp use-by dates on tracked veg
+  const added=sweepAutoList()+sweepPredict();   // catch items below the line / predicted to run out
+  renderActive();
+  refreshStoreSelects();
+  autofillPickers();
+  updateBadges();
+  if(added||seeded) DB.save(state);
+  if(firstLoad && DB.mode==='cloud') DB.watchInbox(handleInboxItem);  // start draining the Siri inbox
+  firstLoad=false;
+  runReminders();                       // surface use-soon / running-low reminders (#6)
+  if(state.notify===true && 'Notification' in window && Notification.permission==='granted') registerPeriodicSync();
+}
+
+/* ---------- populate category selects ---------- */
+function fillCatSelect(sel){
+  sel.innerHTML = CATEGORIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+/* ---------- SHOPPING ---------- */
+// Add one buy-unit to the shopping list (no commit). Pack items add a whole
+// pack in its real measure (milk → +4 L); plain items add 1 in their unit.
+function addShopUnit(name,cat,store,unit){
+  name=String(name||'').trim(); if(!name) return;
+  store=store||'';
+  const b=buyUnit(name,unit);
+  const existing = state.shopping.find(i=>!i.deleted && !i.checked && i.name.toLowerCase()===name.toLowerCase() && (i.store||'')===store && (i.unit||'each')===b.unit);
+  if(existing){ existing.qty=round3((existing.qty||0)+b.qty); if(b.pack) existing.pack=b.pack; touch(existing); }
+  else{ const it={id:uid(),name,qty:b.qty,cat:cat||'other',store,unit:b.unit,checked:false,updatedAt:now()}; if(b.pack) it.pack=b.pack; state.shopping.push(it); }
+}
+function addShop(name,cat,store,unit){
+  name=String(name||'').trim(); if(!name) return;
+  addShopUnit(name,cat,store,unit);
+  commit();
+}
+
+/* ---------- Siri / Shortcuts inbox ---------- */
+// Add an item that arrived from an Apple Shortcut. Applies the same
+// remembered store / aisle / unit the manual add bar uses, and merges
+// duplicates so saying the same thing twice just bumps the quantity.
+function addFromInbox(name, qty){
+  name=String(name||'').trim(); if(!name) return;
+  qty=round3(Math.max(1, Number(qty)||1));
+  const d=(state.itemDefaults||{})[name.toLowerCase()];
+  const store=d?(d.store||''):'';
+  const cat  =d?(d.cat||'other'):'other';
+  const unit =d?(d.unit||'each'):'each';
+  const existing=state.shopping.find(i=>!i.deleted && !i.checked && i.name.toLowerCase()===name.toLowerCase() && (i.store||'')===store && (i.unit||'each')===unit);
+  if(existing){ existing.qty=round3((existing.qty||0)+qty); touch(existing); }
+  else{ state.shopping.push({id:uid(),name,qty,cat,store,unit,checked:false,updatedAt:now()}); }
+}
+// Called for each item the Siri/Shortcuts inbox delivers.
+function handleInboxItem(data){
+  const name=String((data&&data.name)||'').trim();
+  if(!name) return;
+  const qty=Number(data&&data.qty)||1;
+  addFromInbox(name,qty);
+  commit();
+  toast(`Added “${name}”`);
+}
+
+// Case-insensitive search text for a view's filter box ('' = no filter). (#2)
+function searchQ(view){ const el=$(view==='pantry'?'#pantrySearch':'#shopSearch'); return el?el.value.trim().toLowerCase():''; }
+function renderShopping(){
+  renderStaples();
+  const root=$('#shopList');
+  const all=live(state.shopping);
+  if(!all.length){ root.innerHTML=emptyState(bigIcon('cart'),'Your list is empty','Add what you need above — it shows up on both your phones.'); return; }
+  const q=searchQ('shopping');
+  const items=q?all.filter(i=>i.name.toLowerCase().includes(q)):all;
+  if(!items.length){ root.innerHTML=emptyState(bigIcon('search'),'No matches',`Nothing on your list matches “${esc(q)}”.`); return; }
+  const active=items.filter(i=>!i.checked), done=items.filter(i=>i.checked);
+  let html='';
+  // store order: your stores, plus any extra stores found on items, then "Any store" last
+  const stores=[...state.stores];
+  active.forEach(i=>{ if(i.store && !stores.includes(i.store)) stores.push(i.store); });
+  for(const store of [...stores,'']){
+    const g=active.filter(i=>(i.store||'')===store);
+    if(!g.length) continue;
+    const label=store||'Any store';
+    html+=`<div class="store-group"><div class="store-head"><span class="store-name">${storeIcon(store)}<span>${esc(label)}</span></span><span class="store-head-r"><button class="mini-btn" data-act="editaisles" data-store="${esc(store)}" title="Edit aisle order" aria-label="Edit aisle order for ${esc(label)}">⇅</button><span class="store-count">${g.length}</span></span></div>`;
+    // within each store, group by category in this store's walk-order
+    for(const cid of aisleOrderFor(store)){
+      const c=catMap[cid]; if(!c) continue;
+      const cg=g.filter(i=>i.cat===cid);
+      if(!cg.length) continue;
+      html+=`<div class="cat-group"><div class="cat-head"><span class="em">${catIcon(c.id)}</span>${c.name}</div><ul class="list">`;
+      html+=cg.map(shopRow).join('');
+      html+=`</ul></div>`;
+    }
+    html+=`</div>`;
+  }
+  if(done.length){
+    html+=`<div class="section-label"><svg class="mico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>In the cart (${done.length})</div><ul class="list">`;
+    html+=done.map(shopRow).join('');
+    html+=`</ul><div class="list-actions"><button class="text-btn" data-act="clear-checked">Clear cart items</button></div>`;
+  }
+  root.innerHTML=html;
+}
+function shopRow(i){
+  const staple=isStaple(i.name);
+  return `<li class="item ${i.checked?'done':''}" data-id="${i.id}" data-list="shopping">
+    <button class="check ${i.checked?'on':''}" data-act="toggle" aria-label="${i.checked?'Mark as not bought':'Mark as bought'}" aria-pressed="${i.checked?'true':'false'}"><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></button>
+    <span class="name">${esc(i.name)}${i.auto?'<span class="auto-tag" title="Added automatically — your pantry was running low">auto</span>':''}</span>
+    <button class="star ${staple?'on':''}" data-act="staple" title="Save as a staple" aria-label="${staple?'Remove '+esc(i.name)+' from staples':'Save '+esc(i.name)+' as a staple'}" aria-pressed="${staple?'true':'false'}"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2.6l2.85 6 6.55.8-4.85 4.45 1.3 6.5L12 18.9 6.15 20.85l1.3-6.5L2.6 9.4l6.55-.8L12 2.6Z"/></svg></button>
+    <div class="qty"><button data-act="dec" aria-label="Decrease quantity">−</button><span class="n">${esc(fmtPacked(i))}</span><button data-act="inc" aria-label="Increase quantity">+</button></div>
+    <button class="mini-btn store-btn" data-act="setstore" title="${i.store?'Store: '+esc(i.store):'Choose store'}" aria-label="Choose store for ${esc(i.name)}">${storeIcon(i.store)}</button>
+    <button class="del" data-act="del" aria-label="Remove ${esc(i.name)}">×</button>
+  </li>`;
+}
+
+/* ---------- STAPLES / FAVOURITES (#5) ----------
+   A curated set of recurring items. Star an item on the list to save it; tap a
+   staple chip (or "Add all") to drop it back on the list without retyping. */
+function stapleByName(name){
+  const n=String(name||'').trim().toLowerCase();
+  return (state.staples||[]).find(s=>!s.deleted && String(s.name).toLowerCase()===n);
+}
+function isStaple(name){ return !!stapleByName(name); }
+function toggleStaple(item){
+  state.staples=state.staples||[];
+  const ex=stapleByName(item.name);
+  if(ex){ tomb(ex); toast('Removed from staples'); }
+  else{
+    state.staples.push({id:uid(),name:item.name,cat:item.cat||guessCat(item.name)||'other',
+      store:item.store||defaultStoreFor(item.name)||'',unit:item.unit||'each',updatedAt:now()});
+    toast('Saved as a staple');
+  }
+  commit();
+}
+function addStapleToList(name){
+  const s=stapleByName(name); if(!s) return;
+  addShopUnit(s.name, s.cat||guessCat(s.name)||'other', s.store||defaultStoreFor(s.name), s.unit||'each');
+  commit();
+  toast(`Added ${s.name} to your list`);
+}
+function addAllStaples(){
+  const list=(state.staples||[]).filter(s=>!s.deleted);
+  if(!list.length){ toast('No staples yet — tap the star on an item to save it'); return; }
+  list.forEach(s=>addShopUnit(s.name, s.cat||guessCat(s.name)||'other', s.store||defaultStoreFor(s.name)||'', s.unit||'each'));
+  commit();
+  toast(`Added ${list.length} staple${list.length>1?'s':''} to your list`);
+}
+function removeStaple(name){ const s=stapleByName(name); if(s){ tomb(s); commit(); toast('Removed from staples'); } }
+function renderStaples(){
+  const bar=$('#stapleBar'); if(!bar) return;
+  const list=(state.staples||[]).filter(s=>!s.deleted).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  if(!list.length){ bar.innerHTML=''; return; }
+  bar.innerHTML=`<div class="staple-row">`+
+    list.map(s=>`<span class="staple-chip"><button class="staple-add" data-act="addstaple" data-name="${esc(s.name)}" aria-label="Add ${esc(s.name)} to list"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2.6l2.85 6 6.55.8-4.85 4.45 1.3 6.5L12 18.9 6.15 20.85l1.3-6.5L2.6 9.4l6.55-.8L12 2.6Z"/></svg>${esc(s.name)}</button><button class="staple-del" data-act="delstaple" data-name="${esc(s.name)}" aria-label="Remove ${esc(s.name)} from staples">×</button></span>`).join('')+
+    `<button class="staple-all" data-act="addallstaples">＋ Add all</button></div>`;
+}
+
+/* ---------- STORES ---------- */
+// Map a store name to a recognizable line icon. Matches on keywords in the name,
+// so "Costco Kirkland", "my local Costco" etc. all resolve. Falls back to a
+// generic storefront for named stores, and a shopping bag for "Any store".
+function storeIcon(name){
+  const n=(name||'').toLowerCase().trim();
+  const W='<svg class="st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">', E='</svg>';
+  if(!n) return W+'<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'+E;                                  // any store — shopping bag
+  if(/home ?depot|lowe'?s|lowes|hardware|menard|true value|ace hardware/.test(n))
+    return W+'<path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9"/><path d="M17.6 15 22 10.6"/><path d="m20.9 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25v-.86L16 4.6a5.56 5.56 0 0 0-3.94-1.64H9l.92.82A6.18 6.18 0 0 1 12 8.4v1.56l2 2h.86c.85 0 1.65.34 2.25.93l1.25 1.25"/>'+E;  // hardware — hammer
+  if(/costco|sam'?s|bj'?s|wholesale|warehouse|club/.test(n))
+    return W+'<path d="M3 21V10l9-5 9 5v11"/><path d="M2 21h20"/><rect x="8.5" y="13" width="7" height="8" rx="0.5"/><path d="M8.5 16.3h7M8.5 18.5h7"/>'+E;             // warehouse club
+  if(/walmart|wal-mart|target|kmart|meijer|super ?center|super ?store|department/.test(n))
+    return W+'<rect x="3" y="6" width="18" height="15" rx="1"/><path d="M3 10h18"/><rect x="10.3" y="13" width="3.4" height="8"/><rect x="5.7" y="13" width="2.6" height="2.6"/><rect x="15.7" y="13" width="2.6" height="2.6"/>'+E;  // big-box store
+  if(/cvs|walgreen|rite ?aid|pharmacy|drug ?store|drugstore|chemist|apothecary/.test(n))
+    return W+'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/>'+E;                                                                          // pharmacy — cross
+  if(/farmer|farm ?stand|orchard|produce|green ?market/.test(n))
+    return W+'<path d="M12 8c-1.2-1.2-3.5-1.5-5 0-1.8 1.7-1.6 5.2-.2 7.9C7.7 17.6 9 19 10.5 19c.6 0 1-.2 1.5-.2s.9.2 1.5.2c1.5 0 2.8-1.4 3.7-3.1 1.4-2.7 1.6-6.2-.2-7.9-1.5-1.5-3.8-1.2-5 0Z"/><path d="M12 8V5"/><path d="M12 5c0-1.4 1.1-2.5 2.5-2.5C14.5 3.9 13.4 5 12 5Z"/>'+E;  // farmers market — apple
+  if(/grocery|grocer|supermarket|market|trader ?joe|whole ?foods|aldi|kroger|safeway|publix|wegmans|albertsons|heb|h-e-b|sprouts|food|fresh|independent|corner|bodega|deli|mart/.test(n))
+    return W+'<path d="m3 9 2-4.5A1 1 0 0 1 5.9 4h12.2a1 1 0 0 1 .9.5L21 9"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M3 9a2.2 2.2 0 0 0 4 0 2.2 2.2 0 0 0 4 0 2.2 2.2 0 0 0 4 0 2.2 2.2 0 0 0 4 0"/><path d="M10 20v-5h4v5"/>'+E;  // independent grocery — storefront
+  return W+'<path d="M4 21V7l8-4 8 4v14"/><path d="M3 21h18"/><rect x="9.5" y="14.5" width="5" height="6.5"/><rect x="6.5" y="9.5" width="3" height="3"/><rect x="14.5" y="9.5" width="3" height="3"/>'+E;  // generic shop
+}
+let storeCtx=null; // {itemId} = item to assign; null = set the add-bar picker
+function fillStoreSelect(sel){
+  const opts=['<option value="">Any store</option>'];
+  state.stores.forEach(s=>opts.push(`<option value="${esc(s)}">${esc(s)}</option>`));
+  opts.push('<option value="__new__">＋ New store…</option>');
+  sel.innerHTML=opts.join('');
+}
+function refreshStoreSelects(){
+  const sel=$('#shopStore'); if(!sel) return;
+  const cur=sel.value;
+  fillStoreSelect(sel);
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
+function ensureStore(name){
+  name=(name||'').trim(); if(!name) return '';
+  const found=state.stores.find(s=>s.toLowerCase()===name.toLowerCase());
+  if(found) return found;
+  state.stores.push(name);
+  return name;
+}
+function openStoreModal(itemId){
+  storeCtx={itemId:itemId||null};
+  $('#storeTitle').textContent=itemId?'Choose a store':'Add a store';
+  $('#newStoreName').value='';
+  renderStoreChoices();
+  $('#storeOverlay').classList.add('show');
+  if(!itemId) setTimeout(()=>$('#newStoreName').focus(),120);
+}
+function renderStoreChoices(){
+  const cur=storeCtx&&storeCtx.itemId?((state.shopping.find(i=>i.id===storeCtx.itemId)||{}).store||''):'';
+  const all=['',...state.stores];
+  $('#storeChoices').innerHTML=all.map(s=>{
+    const label=s||'Any store';
+    return `<button class="store-choice ${s===cur?'on':''}" data-act="pickstore" data-store="${esc(s)}">${storeIcon(s)}<span>${esc(label)}</span></button>`;
+  }).join('');
+}
+function applyStore(store){
+  if(storeCtx && storeCtx.itemId){
+    const it=state.shopping.find(i=>i.id===storeCtx.itemId);
+    if(it){ it.store=store; touch(it); }
+    commit();
+  }else{
+    refreshStoreSelects();
+    const sel=$('#shopStore'); if(sel) sel.value=store;
+    pickerTouched=true;
+  }
+  closeStore();
+}
+function createStoreFromInput(){
+  const name=$('#newStoreName').value.trim();
+  if(!name){ toast('Type a store name'); return; }
+  const canonical=ensureStore(name);
+  refreshStoreSelects(); commit();
+  applyStore(canonical);
+  toast(`Added ${canonical}`);
+}
+function closeStore(){ $('#storeOverlay').classList.remove('show'); }
+
+/* ---------- store walk-order editor (#10) ---------- */
+let aisleCtx=null;   // {store, order:[catIds]}
+function openAisleEditor(store){
+  aisleCtx={store:store||'', order:aisleOrderFor(store||'')};
+  $('#aisleTitle').textContent='Aisle order — '+(store||'Any store');
+  renderAisleEditor();
+  $('#aisleOverlay').classList.add('show');
+}
+function renderAisleEditor(){
+  const root=$('#aisleList'); if(!root||!aisleCtx) return;
+  const o=aisleCtx.order;
+  root.innerHTML=o.map((cid,i)=>{
+    const c=catMap[cid]; if(!c) return '';
+    return `<div class="aisle-row">
+      <span class="aisle-name">${catIcon(c.id)}${esc(c.name)}</span>
+      <span class="aisle-moves">
+        <button class="mini-btn" data-act="aisle-up" data-cat="${cid}" ${i===0?'disabled':''} aria-label="Move ${esc(c.name)} up">↑</button>
+        <button class="mini-btn" data-act="aisle-down" data-cat="${cid}" ${i===o.length-1?'disabled':''} aria-label="Move ${esc(c.name)} down">↓</button>
+      </span>
+    </div>`;
+  }).join('');
+}
+function moveAisle(cid,delta){
+  if(!aisleCtx) return;
+  const o=aisleCtx.order, i=o.indexOf(cid), j=i+delta;
+  if(i<0 || j<0 || j>=o.length) return;
+  [o[i],o[j]]=[o[j],o[i]];
+  renderAisleEditor();
+}
+function saveAisleOrder(){
+  if(!aisleCtx) return;
+  state.storeAisleOrder=state.storeAisleOrder||{};
+  state.storeAisleOrder[aisleCtx.store]={order:aisleCtx.order.slice(),updatedAt:now()};
+  closeAisle(); commit(); toast('Aisle order saved');
+}
+function resetAisleOrder(){
+  if(!aisleCtx) return;
+  state.storeAisleOrder=state.storeAisleOrder||{};
+  state.storeAisleOrder[aisleCtx.store]={order:[],updatedAt:now(),deleted:true};   // tombstone so the reset syncs
+  closeAisle(); commit(); toast('Reset to default order');
+}
+function closeAisle(){ $('#aisleOverlay').classList.remove('show'); }
+
+/* ---------- item memory & defaults ---------- */
+// remembered default store for an item name ('' = any store)
+function defaultStoreFor(name){
+  const d=(state.itemDefaults||{})[(name||'').trim().toLowerCase()];
+  return (d && !d.deleted)?(d.store||''):'';
+}
+// remember the store + aisle the user chose for an item name
+function rememberItem(name,store,cat,unit){
+  name=(name||'').trim(); if(!name) return;
+  state.itemDefaults=state.itemDefaults||{};
+  state.itemDefaults[name.toLowerCase()]={name,store:store||'',cat:cat||'other',unit:unit||'each',updatedAt:now()};
+}
+function setSelectIfPresent(sel,val){ if(sel && [...sel.options].some(o=>o.value===val)) sel.value=val; }
+// fill the add-bar pickers from item memory (recognized name) else last-used (sticky)
+function autofillPickers(){
+  if(pickerTouched) return;
+  const sel=$('#shopStore'); if(!sel) return;
+  const name=$('#shopInput').value.trim().toLowerCase();
+  let d=name?(state.itemDefaults||{})[name]:null;
+  if(d && d.deleted) d=null;
+  const store=d?(d.store||''):(sticky.store||'');
+  const cat  =d?(d.cat||'other'):(guessCat(name)||sticky.cat||'other');
+  let unit =d?(d.unit||'each'):(sticky.unit||'each');
+  const pk=name?packFor(name):null;            // pack items show their real unit (e.g. "L")
+  if(pk && (!d || (d.unit||'each')==='each')) unit=pk.unit;
+  setSelectIfPresent(sel,store);
+  setSelectIfPresent($('#shopCat'),cat);
+  setSelectIfPresent($('#shopUnit'),unit);
+}
+// Pantry add bar: auto-pick the aisle from the dictionary as you type, until you
+// override it. Re-arms when the input is cleared. (#4)
+let pantryCatTouched=false;
+function autofillPantryCat(){
+  if(pantryCatTouched) return;
+  const g=guessCat($('#pantryInput').value.trim());
+  if(g) setSelectIfPresent($('#pantryCat'),g);
+}
+// Settings: list remembered items, each with a store picker + forget button
+function renderItemDefaults(){
+  const root=$('#itemDefaultsList'); if(!root) return;
+  const entries=Object.values(state.itemDefaults||{}).filter(e=>!e.deleted).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  if(!entries.length){ root.innerHTML='<div class="sub" style="margin:0">Items you add to your list will appear here so you can set a default store.</div>'; return; }
+  const opt=(cur)=>{
+    let o=`<option value="" ${cur===''?'selected':''}>Any store</option>`;
+    state.stores.forEach(s=>{ o+=`<option value="${esc(s)}" ${s===cur?'selected':''}>${esc(s)}</option>`; });
+    return o;
+  };
+  root.innerHTML=entries.map(e=>`<div class="def-row" data-name="${esc(String(e.name).toLowerCase())}">
+    <span class="def-name">${esc(e.name)}</span>
+    <select class="def-store">${opt(e.store||'')}</select>
+    <button class="del" data-act="forgetdef" data-name="${esc(String(e.name).toLowerCase())}">×</button>
+  </div>`).join('');
+}
+
+/* ---------- PANTRY ---------- */
+function addPantry(name,cat,unit){
+  name=name.trim(); if(!name) return;
+  const b=buyUnit(name,unit);
+  const existing=state.pantry.find(i=>!i.deleted && i.name.toLowerCase()===name.toLowerCase());
+  if(existing){
+    existing.qty=round3((existing.qty||0)+b.qty);
+    if(b.pack){ existing.pack=b.pack; if(!existing.unit||existing.unit==='each') existing.unit=b.unit; }
+    bumpFull(existing); if(!almostGone(existing)) existing.autoListed=false; touch(existing);
+  }
+  else{ const it={id:uid(),name,qty:b.qty,cat:cat||'other',unit:b.unit,low:false,full:b.qty,updatedAt:now()}; if(b.pack) it.pack=b.pack; state.pantry.push(it); }
+  commit();
+}
+function renderPantry(){
+  const root=$('#pantryList');
+  const all=live(state.pantry);
+  renderCookNow();
+  if(!all.length){ root.innerHTML=emptyState(bigIcon('can'),'Pantry is empty','Track what you already have so you don\'t double-buy.'); return; }
+  const q=searchQ('pantry');
+  const items=q?all.filter(i=>i.name.toLowerCase().includes(q)):all;
+  if(!items.length){ root.innerHTML=emptyState(bigIcon('search'),'No matches',`Nothing in your pantry matches “${esc(q)}”.`); return; }
+  // low items first
+  const low=items.filter(isLow);
+  let html='';
+  if(low.length){
+    html+=`<div class="cat-group"><div class="cat-head"><span class="em"><svg class="cat-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 16.6v.4"/></svg></span>Running low</div><ul class="list">`;
+    html+=low.map(pantryRow).join('')+`</ul></div>`;
+  }
+  for(const c of CATEGORIES){
+    const g=items.filter(i=>i.cat===c.id && !isLow(i));
+    if(!g.length) continue;
+    html+=`<div class="cat-group"><div class="cat-head"><span class="em">${catIcon(c.id)}</span>${c.name}</div><ul class="list">`;
+    html+=g.map(pantryRow).join('')+`</ul></div>`;
+  }
+  root.innerHTML=html;
+}
+function pantryRow(i){
+  const pct=pctOf(i), qn=Number(i.qty)||0;
+  const pill = (pct!=null && qn>0 && pct<100)
+    ? `<span class="pct-pill ${pctClass(pct)}" title="${pct}% of a full ${esc(i.unit||'each')} left">${pct}%</span>` : '';
+  return `<li class="item" data-id="${i.id}" data-list="pantry">
+    <button class="star ${isLow(i)?'on':''}" data-act="low" title="Mark running low" aria-label="${isLow(i)?'Unmark running low':'Mark '+esc(i.name)+' as running low'}" aria-pressed="${isLow(i)?'true':'false'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 16.6v.4"/></svg></button>
+    <span class="name" data-act="editpantry" role="button" tabindex="0" title="Edit item" aria-label="Edit ${esc(i.name)}">${esc(i.name)}</span>
+    ${freshPill(i)}
+    ${predPill(i)}
+    ${pill}
+    <div class="qty"><button data-act="dec" aria-label="Decrease quantity">−</button><span class="n">${esc(fmtPacked(i))}</span><button data-act="inc" aria-label="Increase quantity">+</button></div>
+    <button class="mini-btn" data-act="topantrylist" aria-label="Add ${esc(i.name)} to shopping list">+ List</button>
+    <button class="del" data-act="del" aria-label="Remove ${esc(i.name)}">×</button>
+  </li>`;
+}
+
+/* ---------- MEALS ---------- */
+let mealCtx = null; // {dateKey, mealId|null}
+let mealSteps = []; // steps (method) for the meal currently open in the modal
+function renderMeals(){
+  const end=addDays(weekStart,6);
+  $('#weekLabel').innerHTML=`${fmtShort(weekStart)} – ${fmtShort(end)}<small>${weekStart.getFullYear()}</small>`;
+  const todayKey=iso(new Date());
+  let html='';
+  for(let d=0;d<7;d++){
+    const day=addDays(weekStart,d), key=iso(day);
+    const meals=live(state.meals[key]).slice().sort((a,b)=>slotOrder(a.slot)-slotOrder(b.slot));
+    const isToday=key===todayKey;
+    html+=`<div class="day-card ${isToday?'today':''}">
+      <div class="day-head">
+        <span class="dname">${DAY_NAMES[d]}</span>
+        <span class="ddate">${fmtShort(day)}${isToday?' <span class="badge">Today</span>':''}</span>
+      </div>
+      <div class="meals-wrap">`;
+    html+=meals.map(m=>`<button class="meal-chip" data-act="editmeal" data-key="${key}" data-mid="${m.id}">
+        <span class="slot-dot slot-${m.slot}"></span>${esc(m.name)}</button>`).join('');
+    html+=`<button class="add-meal" data-act="addmeal" data-key="${key}">+ Add meal</button>`;
+    html+=`</div></div>`;
+  }
+  $('#weekDays').innerHTML=html;
+}
+function slotOrder(s){return {breakfast:0,lunch:1,dinner:2,snack:3}[s]??9;}
+
+function openMeal(dateKey, mealId){
+  mealCtx={dateKey,mealId:mealId||null};
+  const day=new Date(dateKey+'T00:00:00');
+  $('#mealDay').textContent=DAY_NAMES[(day.getDay()+6)%7]+', '+fmtShort(day);
+  const meal = mealId ? live(state.meals[dateKey]).find(m=>m.id===mealId) : null;
+  $('#mealTitle').textContent = meal?'Edit meal':'Add a meal';
+  $('#mealName').value = meal?meal.name:'';
+  const slot = meal?meal.slot:'dinner';
+  $$('#mealSlots .slot-pick').forEach(b=>b.classList.toggle('on',b.dataset.slot===slot));
+  renderIngs(meal?meal.ingredients||[]:[]);
+  mealSteps = meal ? (meal.steps||[]).slice() : [];
+  renderSteps();
+  if($('#importUrl')) $('#importUrl').value='';
+  renderLibChips();
+  renderMealDays();
+  $('#mealDelete').style.display = meal?'block':'none';
+  $('#mealOverlay').classList.add('show');
+  setTimeout(()=>$('#mealName').focus(),120);
+}
+function renderIngs(ings){
+  $('#ingList').innerHTML = ings.map(g=>ingRow(g.name,g.qty,g.unit,g.cat)).join('');
+}
+function ingRow(name='',qty='1',unit='each',cat='other'){
+  return `<div class="ing-row">
+    <input class="ing-name" type="text" placeholder="ingredient" value="${esc(name)}" />
+    <input class="ing-qty" type="text" inputmode="decimal" value="${esc(qty)}" />
+    <select class="ing-unit">${unitOptions(unit)}</select>
+    <button class="del" data-act="delIng">×</button>
+  </div>`;
+}
+function readIngs(){
+  return $$('#ingList .ing-row').map(r=>({
+    name:$('.ing-name',r).value.trim(),
+    qty:$('.ing-qty',r).value.trim()||'1',
+    unit:($('.ing-unit',r)||{}).value||'each',
+    cat:'other'
+  })).filter(g=>g.name);
+}
+function currentSlot(){return ($('#mealSlots .slot-pick.on')||{}).dataset?.slot||'dinner';}
+// Steps live in a textarea (one per line) that only shows once a meal has steps
+// — e.g. after an import. Hidden for plain manual adds to keep the modal tidy.
+function renderSteps(){
+  const f=$('#stepsField'); if(!f) return;
+  if(mealSteps && mealSteps.length){ f.style.display='block'; $('#stepText').value=mealSteps.join('\n'); }
+  else{ f.style.display='none'; $('#stepText').value=''; }
+}
+function readSteps(){
+  const f=$('#stepsField');
+  if(f && f.style.display!=='none') return $('#stepText').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  return (mealSteps||[]).slice();
+}
+
+// Write the meal (and its adjusted ingredient amounts) into state.
+// Returns false if it can't (no name yet). Does NOT close/commit.
+function persistMeal(){
+  const name=$('#mealName').value.trim();
+  if(!name){ toast('Give the meal a name'); return false; }
+  const {dateKey,mealId}=mealCtx;
+  const ings=readIngs();
+  const steps=readSteps();
+  mealSteps=steps.slice();
+  state.meals[dateKey]=state.meals[dateKey]||[];
+  if(mealId){
+    const m=state.meals[dateKey].find(x=>x.id===mealId);
+    if(m){ m.name=name; m.slot=currentSlot(); m.ingredients=ings; m.steps=steps; touch(m); }
+  }else{
+    const id=uid();
+    state.meals[dateKey].push({id,name,slot:currentSlot(),ingredients:ings,steps,updatedAt:now()});
+    mealCtx.mealId=id;
+  }
+  upsertRecipe(name,currentSlot(),ings,steps);
+  return true;
+}
+function saveMeal(){
+  if(!persistMeal()) return;
+  const n=copyMealToSelectedDays();
+  closeMeal(); commit();
+  toast(n?`Meal saved · added to ${n} more day${n>1?'s':''}`:'Meal saved');
+}
+
+// Merge an amount into the active (unchecked) shopping list.
+function addToShopping(name,qty,cat,unit){
+  unit=unit||'each';
+  const store=defaultStoreFor(name);
+  const existing=state.shopping.find(i=>!i.deleted && !i.checked && i.name.toLowerCase()===name.toLowerCase() && (i.store||'')===store && (i.unit||'each')===unit);
+  if(existing){ existing.qty=round3((existing.qty||0)+qty); touch(existing); }
+  else state.shopping.push({id:uid(),name,qty,cat:cat||'other',store,unit,checked:false,updatedAt:now()});
+}
+
+// "Cook it": pull each ingredient's adjustable amount out of the pantry.
+// If the pantry is short, take what's there, mark it low, and add the
+// remainder to the shopping list. Ingredients with no pantry match go
+// straight to the shopping list.
+function cookMeal(){
+  const ings=readIngs();
+  if(!ings.length){ toast('Add ingredients to cook with first'); return; }
+  if(!persistMeal()) return;                 // saves the adjusted amounts too
+  let usedCount=0, listedCount=0;
+  ings.forEach(g=>{
+    const need=parseFloat(g.qty)||0; const needUnit=g.unit||'each';
+    if(need<=0) return;
+    const p=state.pantry.find(i=>!i.deleted && i.name.toLowerCase()===g.name.toLowerCase());
+    if(p){
+      const r=deduct(p.qty||0, p.unit||'each', need, needUnit);
+      if(r){                                   // compatible units → take what we can
+        p.qty=r.newHave;
+        if(r.took) usedCount++;
+        if(r.shortfall>0){ addToShopping(g.name,r.shortfall,p.cat,needUnit); p.low=true; listedCount++; }
+        else if(p.qty<=0){ p.low=true; }
+        touch(p);
+      }else{                                   // incompatible units → list the whole need
+        addToShopping(g.name,need,g.cat||'other',needUnit); listedCount++;
+      }
+    }else{                                     // not stocked → all to the list
+      addToShopping(g.name,need,g.cat||'other',needUnit);
+      listedCount++;
+    }
+  });
+  commit(); closeMeal();
+  const parts=[];
+  if(usedCount)   parts.push(`used ${usedCount} from pantry`);
+  if(listedCount) parts.push(`added ${listedCount} to list`);
+  toast(parts.length?`Cooked — ${parts.join(' · ')}`:'Cooked!');
+}
+function deleteMeal(){
+  const {dateKey,mealId}=mealCtx;
+  const m = (mealId && state.meals[dateKey]) ? state.meals[dateKey].find(x=>x.id===mealId) : null;
+  if(m) tomb(m);
+  closeMeal(); commit();
+  toast('Meal removed', m?{undo:()=>{ const arr=state.meals[dateKey]||[]; const mm=arr.find(x=>x.id===mealId); if(mm){ touch(mm); commit(); } }}:undefined);
+}
+function mealIngsToList(){
+  const ings=readIngs();
+  if(!ings.length){ toast('Add some ingredients first'); return; }
+  ings.forEach(g=>addToShopping(g.name, parseFloat(g.qty)||1, g.cat, g.unit));
+  // also persist edits to the meal if editing existing
+  if(mealCtx.mealId){ saveMeal(); } else { commit(); }
+  toast(`Added ${ings.length} item${ings.length>1?'s':''} to your list`);
+  closeMeal();
+  switchView('shopping');
+}
+function closeMeal(){ $('#mealOverlay').classList.remove('show'); }
+
+/* ---------- meal library, copy & week planning ---------- */
+// auto-collect every saved meal into a reusable library (keyed by name)
+function upsertRecipe(name,slot,ings,steps){
+  name=(name||'').trim(); if(!name) return;
+  state.recipes=state.recipes||[];
+  const key=name.toLowerCase();
+  const ingredients=(ings||[]).map(g=>({name:g.name,qty:g.qty,cat:g.cat||'other',unit:g.unit||'each'}));
+  const stepList=(steps||[]).map(s=>String(s||'').trim()).filter(Boolean);
+  const existing=state.recipes.find(r=>!r.deleted && String(r.name).toLowerCase()===key);
+  if(existing){
+    existing.slot=slot||existing.slot||'dinner'; existing.ingredients=ingredients;
+    if(stepList.length) existing.steps=stepList;   // keep prior steps if this save had none
+    existing.usedAt=Date.now(); touch(existing);
+  }
+  else{ state.recipes.push({id:uid(),name,slot:slot||'dinner',ingredients,steps:stepList,usedAt:Date.now(),updatedAt:now()}); }
+}
+function renderLibChips(){
+  const box=$('#libChips'), field=$('#libField'); if(!box||!field) return;
+  const recs=live(state.recipes).slice().sort((a,b)=>(b.usedAt||0)-(a.usedAt||0)).slice(0,12);
+  field.style.display = recs.length?'block':'none';
+  box.innerHTML=recs.map(r=>`<button class="lib-chip" data-act="usemeal" data-rid="${r.id}">${esc(r.name)}</button>`).join('');
+}
+function fillMealFromRecipe(rid){
+  const r=live(state.recipes).find(x=>x.id===rid); if(!r) return;
+  $('#mealName').value=r.name;
+  const slot=r.slot||'dinner';
+  $$('#mealSlots .slot-pick').forEach(b=>b.classList.toggle('on',b.dataset.slot===slot));
+  renderIngs((r.ingredients||[]).map(g=>({name:g.name,qty:g.qty,unit:g.unit||'each',cat:g.cat})));
+  mealSteps=(r.steps||[]).slice();
+  renderSteps();
+}
+function renderMealDays(){
+  const box=$('#mealDays'); if(!box) return;
+  let html='';
+  for(let d=0;d<7;d++){
+    const day=addDays(weekStart,d), key=iso(day);
+    const base = mealCtx && key===mealCtx.dateKey;
+    html+=`<button class="day-pick${base?' base':''}" data-act="toggleday" data-key="${key}"${base?' disabled':''}>${DAY_NAMES[d][0]}<small>${day.getDate()}</small></button>`;
+  }
+  box.innerHTML=html;
+}
+function copyMealToSelectedDays(){
+  if(!mealCtx) return 0;
+  const keys=$$('#mealDays .day-pick.on').map(b=>b.dataset.key).filter(k=>k && k!==mealCtx.dateKey);
+  if(!keys.length) return 0;
+  const base=live(state.meals[mealCtx.dateKey]).find(m=>m.id===mealCtx.mealId);
+  if(!base) return 0;
+  keys.forEach(key=>{
+    state.meals[key]=state.meals[key]||[];
+    state.meals[key].push({id:uid(),name:base.name,slot:base.slot,ingredients:(base.ingredients||[]).map(g=>({...g})),steps:(base.steps||[]).slice(),updatedAt:now()});
+  });
+  return keys.length;
+}
+// all ingredients across the 7 days of a week, summed by name
+function weekIngredients(ws){
+  const agg={};
+  for(let d=0;d<7;d++){
+    const key=iso(addDays(ws,d));
+    live(state.meals[key]).forEach(m=>(m.ingredients||[]).forEach(g=>{
+      if(!g.name) return;
+      const unit=g.unit||'each';
+      const k=String(g.name).toLowerCase()+'|'+unit;
+      const q=parseFloat(g.qty)||1;
+      if(!agg[k]) agg[k]={name:g.name,qty:0,cat:g.cat||'other',unit};
+      agg[k].qty=round3(agg[k].qty+q);
+    }));
+  }
+  return Object.values(agg);
+}
+function planWeekToList(){
+  const need=weekIngredients(weekStart);
+  if(!need.length){ toast('No meal ingredients planned this week'); return; }
+  let added=0;
+  need.forEach(n=>{
+    const p=state.pantry.find(i=>!i.deleted && i.name.toLowerCase()===n.name.toLowerCase());
+    let short;
+    if(p){ const r=deduct(p.qty||0, p.unit||'each', n.qty, n.unit); short=r?r.shortfall:n.qty; }
+    else short=n.qty;
+    if(short>0){ addToShopping(n.name,short,n.cat,n.unit); added++; }
+  });
+  commit();
+  toast(added?`Added ${added} item${added>1?'s':''} to your list`:'You already have everything');
+}
+function copyWeekToNext(){
+  let count=0;
+  for(let d=0;d<7;d++){
+    const src=live(state.meals[iso(addDays(weekStart,d))]);
+    if(!src.length) continue;
+    const dstKey=iso(addDays(weekStart,d+7));
+    state.meals[dstKey]=state.meals[dstKey]||[];
+    src.forEach(m=>{ state.meals[dstKey].push({id:uid(),name:m.name,slot:m.slot,ingredients:(m.ingredients||[]).map(g=>({...g})),steps:(m.steps||[]).slice(),updatedAt:now()}); count++; });
+  }
+  if(!count){ toast('No meals to copy this week'); return; }
+  weekStart=addDays(weekStart,7); renderMeals(); commit();
+  toast(`Copied ${count} meal${count>1?'s':''} into this week`);
+}
+
+/* ---------- plan my week (#9) ----------
+   Auto-fill empty dinner slots in the viewed week from the saved recipe library,
+   biased toward recipes that use soon-to-expire pantry stock (#1) and avoiding
+   meals eaten in the last few days, with no repeats inside the same week. */
+// A recipe counts as veggie if none of its ingredients are meat/seafood.
+function isVeggieRecipe(r){
+  return !((r.ingredients||[]).some(g=>((g.cat||'other')==='meat') || guessCat(g.name)==='meat'));
+}
+// Pick the best recipe for a slot: prefer not-recent + not-already-planned, then
+// soonest-to-expire stock (recipeUrgency), then least-recently-used for variety.
+function choosePlanRecipe(pool,recent,planned){
+  let cand=pool.filter(r=>!planned.has(String(r.name).toLowerCase()));
+  if(!cand.length) cand=pool.slice();                       // out of distinct → allow a repeat
+  const fresh=cand.filter(r=>!recent.has(String(r.name).toLowerCase()));
+  const list=(fresh.length?fresh:cand).slice();
+  list.sort((a,b)=> (recipeUrgency(a)-recipeUrgency(b)) || ((a.usedAt||0)-(b.usedAt||0)) );
+  return list[0]||null;
+}
+function leftoverName(name){ name=String(name||''); return /leftovers/i.test(name)?name:`${name} (leftovers)`; }
+// Fill empty dinners across the viewed week. cookEvery controls cadence: 1 = cook
+// a fresh meal every day (variety), 2 = cook then 1 leftovers day, 3 = batch-cook
+// (2 leftovers days). Leftover meals carry no ingredients, so they're never
+// re-added to the shopping list. Returns count planned, or -1 if the pool is empty.
+function planWeek(veg, cookEvery, quick){
+  cookEvery = cookEvery>0 ? cookEvery : 1;
+  let recipes=live(state.recipes).filter(r=>r && r.name);
+  if(veg) recipes=recipes.filter(isVeggieRecipe);
+  if(quick) recipes=recipes.filter(r=>Number(r.cookMins)>0 && Number(r.cookMins)<=30);
+  const pool=recipes;
+  if(!pool.length) return -1;
+  const recent=new Set(recentMealNames().map(n=>n.toLowerCase()));
+  const planned=new Set();
+  for(let d=0;d<7;d++){ live(state.meals[iso(addDays(weekStart,d))]).forEach(m=>planned.add(String(m.name).toLowerCase())); }
+  let count=0, lastCooked=null, sinceCook=cookEvery;   // force a cook on the first empty day
+  for(let d=0;d<7;d++){
+    const key=iso(addDays(weekStart,d));
+    const existing=live(state.meals[key]).find(m=>m.slot==='dinner');
+    if(existing){ lastCooked=existing; sinceCook=1; continue; }   // their own dinner anchors any following leftovers
+    if(lastCooked && cookEvery>1 && sinceCook<cookEvery){
+      state.meals[key]=state.meals[key]||[];
+      state.meals[key].push({id:uid(),name:leftoverName(lastCooked.name),slot:'dinner',ingredients:[],steps:[],updatedAt:now()});
+      sinceCook++; count++;
+    } else {
+      const pick=choosePlanRecipe(pool,recent,planned);
+      if(!pick) break;
+      state.meals[key]=state.meals[key]||[];
+      state.meals[key].push({id:uid(),name:pick.name,slot:'dinner',ingredients:(pick.ingredients||[]).map(g=>({...g})),steps:(pick.steps||[]).slice(),updatedAt:now()});
+      planned.add(String(pick.name).toLowerCase());
+      lastCooked=pick; sinceCook=1; count++;
+    }
+  }
+  return count;
+}
+function openPlan(){
+  $$('#planOpts .slot-pick').forEach(b=>b.classList.remove('on'));
+  $$('#planCadence .slot-pick').forEach(b=>b.classList.toggle('on', b.dataset.cook==='2'));   // default: cook + leftovers
+  $('#planOverlay').classList.add('show');
+}
+function closePlan(){ $('#planOverlay').classList.remove('show'); }
+function doPlan(sendList){
+  const veg=!!($('#planOpts .slot-pick[data-opt="veg"]')||{}).classList?.contains('on');
+  const quick=!!($('#planOpts .slot-pick[data-opt="quick"]')||{}).classList?.contains('on');
+  const cookEvery=Number(($('#planCadence .slot-pick.on')||{}).dataset?.cook)||2;
+  const n=planWeek(veg, cookEvery, quick);
+  if(n===-1){ toast((veg||quick)?'No saved meals match those filters':'No saved meals to plan from yet'); return; }
+  closePlan();
+  if(n===0){ toast('Every day already has a dinner'); return; }
+  commit();
+  if(sendList) planWeekToList(); else toast(`Planned ${n} dinner${n>1?'s':''}`);
+}
+
+/* ---------- pantry: low thresholds, editor, restock, suggestions ---------- */
+// Whole-count units (each/pack/can…) vs bulk measured units (g/kg/ml/L).
+function isCountUnit(u){ return !UNIT_FAMILY[u||'each']; }
+// Percent of "a full one" currently in stock (0-100), or null if no 100% reference.
+function pctOf(i){
+  const full=Number(i.full)||0; if(full<=0) return null;
+  return Math.round((Number(i.qty)||0)/full*100);
+}
+function pctClass(p){ return p<=20?'p-lo':(p<=50?'p-mid':'p-hi'); }
+// Grow an item's `full` reference to the most we've ever had of it.
+function bumpFull(p){ if(p){ p.full=Math.max(Number(p.full)||0, Number(p.qty)||0); } }
+// The qty at/below which an item is "almost gone" (≤ pct of full left).
+// For whole-count items we round up to the last unit so e.g. 10% of 3 eggs
+// flags at 1 left rather than only at zero.
+function lowThreshold(i){
+  const full=Number(i.full)||0;
+  if(full<=0) return 0;
+  const pct=(state.autoListPct>0?state.autoListPct:0.10);
+  let thr=full*pct;
+  if(isCountUnit(i.unit) && full>1) thr=Math.max(thr,1);
+  return thr;
+}
+function almostGone(i){ const t=lowThreshold(i); return t>0 && (Number(i.qty)||0)<=t+1e-9; }
+function isLow(i){ return !!(i.low || (i.lowAt>0 && (i.qty||0)<=i.lowAt) || (state.autoList!==false && almostGone(i))); }
+// Is `name` already on the active (unchecked) shopping list?
+function onShoppingList(name){
+  const n=String(name||'').toLowerCase();
+  return live(state.shopping).some(i=>!i.checked && i.name.toLowerCase()===n);
+}
+// Add pantry items that have just crossed the "almost gone" line to the shopping
+// list — once each. The per-item `autoListed` guard stops it re-adding on every
+// tap; it re-arms when the item is restocked back above the line.
+function sweepAutoList(){
+  if(state.autoList===false) return 0;
+  let added=0;
+  live(state.pantry).forEach(p=>{
+    const gone=almostGone(p);
+    if(gone && !p.autoListed){
+      p.autoListed=true; touch(p);
+      if(!onShoppingList(p.name)){
+        const full=Number(p.full)||0, step=unitStep(p.unit);
+        let refill=round3(full-(Number(p.qty)||0));
+        if(!(refill>0) || refill<step) refill=step;     // top back up to full, at least one unit
+        addToShopping(p.name, refill, p.cat, p.unit||'each');
+        const li=state.shopping.find(i=>!i.deleted && !i.checked && i.name.toLowerCase()===p.name.toLowerCase());
+        if(li){ li.auto=true; touch(li); }              // tag the row so it reads "auto"
+        added++;
+      }
+    }else if(!gone && p.autoListed){
+      p.autoListed=false; touch(p);
+    }
+  });
+  return added;
+}
+let pantryCtx=null;
+// ---- pantry "% full" editor helpers ----
+// What counts as 100% while editing: the explicit "full" field, else the
+// current stock (so a brand-new item reads as a full one), else 1.
+function currentFullInEditor(){
+  let full=parseFloat($('#pEditFull').value);
+  if(!(full>0)){ const q=parseFloat($('#pEditQty').value); full=q>0?q:1; }
+  return full;
+}
+// Type a % → set the stock amount (and pin the 100% reference so it's stable).
+function syncQtyFromPct(){
+  let pct=parseFloat($('#pEditPct').value);
+  if(isNaN(pct)) return;
+  pct=Math.max(0,Math.min(100,pct));
+  let full=parseFloat($('#pEditFull').value);
+  if(!(full>0)){ full=currentFullInEditor(); $('#pEditFull').value=full; }
+  $('#pEditQty').value=round3(full*pct/100);
+}
+// Change the stock amount or the full reference → recompute the %.
+function syncPctFromQty(){
+  const full=currentFullInEditor();
+  const q=parseFloat($('#pEditQty').value)||0;
+  $('#pEditPct').value = full>0 ? Math.round(q/full*100) : '';
+}
+function openPantryEditor(id){
+  const it=state.pantry.find(p=>p.id===id); if(!it) return;
+  pantryCtx={id};
+  $('#pEditName').value=it.name;
+  fillCatSelect($('#pEditCat')); $('#pEditCat').value=it.cat||'other';
+  fillUnitSelect($('#pEditUnit')); $('#pEditUnit').value=it.unit||'each';
+  $('#pEditQty').value=(it.qty??1);
+  $('#pEditLow').value=it.lowAt||'';
+  $('#pEditFull').value=it.full||'';
+  const pk=packFor(it.name);
+  $('#pEditPackPer').value = pk ? pk.per : '';
+  fillUnitSelect($('#pEditPackUnit')); $('#pEditPackUnit').value = pk ? pk.unit : (it.unit||'each');
+  $('#pEditExpiry').value = it.expiresAt ? iso(new Date(it.expiresAt)) : '';
+  $('#pEditEveryday').checked = !!it.everyday;
+  $('#pEditDaysPerPack').value = it.daysPerPack||'';
+  $('#pEditPrice').value = Number(it.price)>0 ? it.price : '';
+  const vd=vegShelfLife(it.name);
+  $('#pEditExpiryHint').textContent = vd!=null
+    ? `Auto: ~${vd} days for fresh ${it.name.toLowerCase()}. Clear to reset to auto.`
+    : 'Set a date to track freshness (auto-set for fresh veg).';
+  syncPctFromQty();
+  $('#pantryOverlay').classList.add('show');
+}
+function savePantryEdit(){
+  if(!pantryCtx) return;
+  const it=state.pantry.find(p=>p.id===pantryCtx.id); if(!it){ closePantryEditor(); return; }
+  const nm=$('#pEditName').value.trim(); if(!nm){ toast('Name can’t be empty'); return; }
+  it.name=nm; it.cat=$('#pEditCat').value; it.unit=$('#pEditUnit').value;
+  it.qty=Math.max(0,parseFloat($('#pEditQty').value)||0);
+  it.lowAt=Math.max(0,parseFloat($('#pEditLow').value)||0);
+  const fullV=Math.max(0,parseFloat($('#pEditFull').value)||0);
+  it.full = fullV>0 ? fullV : Math.max(Number(it.full)||0, it.qty);   // explicit, or keep/seed from qty
+  // Use-by: a date overrides the auto value; blank clears it so seedExpiry()
+  // re-applies the auto date for tracked veg (and leaves non-veg untracked).
+  const ev=$('#pEditExpiry').value;
+  if(ev){ const t=new Date(ev+'T23:59:59').getTime(); it.expiresAt = isNaN(t)?it.expiresAt:t; if(!it.addedAt) it.addedAt=now(); }
+  else { it.expiresAt=0; }
+  it.everyday=$('#pEditEveryday').checked;
+  it.daysPerPack=Math.max(0,parseFloat($('#pEditDaysPerPack').value)||0);
+  it.price=Math.max(0,parseFloat($('#pEditPrice').value)||0);
+  // Buy-as-packs: persist a per-item override (or switch a default off when blank).
+  const per=Math.max(0,parseFloat($('#pEditPackPer').value)||0);
+  const pu=$('#pEditPackUnit').value||'each';
+  const key=nm.toLowerCase();
+  state.packs=state.packs||{};
+  if(per>0){
+    state.packs[key]={per,unit:pu,src:'user',updatedAt:now()};
+    it.pack=per; if(it.unit==='each') it.unit=pu;     // adopt the pack's unit if unset
+  }else{
+    if(PACK_DEFAULTS[key] || state.packs[key]) state.packs[key]={deleted:true,src:'user',updatedAt:now()};
+    delete it.pack;
+  }
+  if(!it.everyday) it.predListed=false;          // stop predicting if un-flagged
+  if(!almostGone(it)) it.autoListed=false;
+  touch(it);
+  closePantryEditor(); commit(); toast('Saved');
+}
+function closePantryEditor(){ $('#pantryOverlay').classList.remove('show'); }
+// add (or remove, with negative delta) stock for an item name, converting into the pantry item's unit
+function addPantryStock(name,deltaAmt,deltaUnit,cat){
+  deltaUnit=deltaUnit||'each';
+  let p=state.pantry.find(i=>!i.deleted && i.name.toLowerCase()===String(name).toLowerCase());
+  const pk=packFor(name);
+  if(!p){ if(deltaAmt<=0) return;
+    const u=(deltaUnit==='each' && pk)?pk.unit:deltaUnit;
+    p={id:uid(),name,qty:0,cat:cat||'other',unit:u,low:false,full:0,updatedAt:now()};
+    if(pk) p.pack=pk.per; state.pantry.push(p); }
+  if(pk && !p.pack) p.pack=pk.per;            // attach pack so % + steps work
+  let conv=convertAmount(deltaAmt, deltaUnit, p.unit||'each');
+  if(conv==null) conv=deltaAmt;                 // incompatible units → best-effort numeric add
+  p.qty=round3(Math.max(0,(p.qty||0)+conv));
+  if(deltaAmt>0){ p.low=false; bumpFull(p); if(!almostGone(p)) p.autoListed=false; }   // restocked → re-arm
+  touch(p);
+}
+// called when a shopping item is checked/unchecked
+function handleRestock(item){
+  if(!state.autoRestock) return;
+  const u=item.unit||'each';
+  if(item.checked && !item.restocked){ addPantryStock(item.name,item.qty||1,u,item.cat); item.restocked=true; }
+  else if(!item.checked && item.restocked){ addPantryStock(item.name,-(item.qty||1),u,item.cat); item.restocked=false; }
+}
+// total pantry amount of `name` expressed in `unit` (only counting comparable units); null if none comparable
+function pantryAmountFor(name,unit){
+  let total=0, any=false;
+  live(state.pantry).forEach(p=>{
+    if(p.name.toLowerCase()===String(name).toLowerCase()){
+      const c=convertAmount(p.qty||0, p.unit||'each', unit||'each');
+      if(c!=null){ total+=c; any=true; }
+    }
+  });
+  return any?total:null;
+}
+// library meals you can fully make with current pantry stock
+function makeableRecipes(){
+  return live(state.recipes).filter(r=>(r.ingredients||[]).length && r.ingredients.every(g=>{
+    const need=parseFloat(g.qty)||1;
+    const got=pantryAmountFor(g.name, g.unit||'each');
+    return got!=null && got>=need-1e-9;
+  }));
+}
+// Soonest use-by among a recipe's ingredients that we actually stock (Infinity if none expiring).
+function recipeUrgency(r){
+  let min=Infinity;
+  (r.ingredients||[]).forEach(g=>{
+    const p=live(state.pantry).find(i=>i.name.toLowerCase()===String(g.name).toLowerCase());
+    const d=p?daysLeft(p):null;
+    if(d!=null && d<min) min=d;
+  });
+  return min;
+}
+function renderCookNow(){
+  const box=$('#cookNow'); if(!box) return;
+  // Prioritise recipes that use up soon-to-expire stock. (#1 feeds #13's cook-now)
+  const recs=makeableRecipes().slice().sort((a,b)=>recipeUrgency(a)-recipeUrgency(b)).slice(0,10);
+  if(!recs.length){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="cat-head"><span class="em"><svg class="cat-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 14h10v5a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-5Z"/><path d="M7 14a3.5 3.5 0 1 1 1.3-6.8 3.5 3.5 0 0 1 7.4 0A3.5 3.5 0 1 1 17 14Z"/></svg></span>Ready to cook with what you have</div>`+
+    `<div class="suggest-wrap">`+recs.map(r=>`<button class="meal-chip" data-act="cooknow" data-rid="${r.id}"><span class="slot-dot slot-${r.slot}"></span>${esc(r.name)}</button>`).join('')+`</div>`;
+}
+function addRecipeToToday(rid){
+  const r=live(state.recipes).find(x=>x.id===rid); if(!r) return;
+  const key=iso(new Date());
+  state.meals[key]=state.meals[key]||[];
+  state.meals[key].push({id:uid(),name:r.name,slot:r.slot,ingredients:(r.ingredients||[]).map(g=>({...g})),steps:(r.steps||[]).slice(),updatedAt:now()});
+  commit(); toast(`Added ${r.name} to today`);
+}
+
+/* ---------- RECIPE VIEW (#3) ----------
+   A real home for the auto-collected recipe library: browse, edit/delete, set
+   cook time + servings, scale by servings, and send to a day or the list. */
+let recipeCtx=null;          // {id} editing, or {id:null} for a new recipe
+let recipeTarget={};         // transient per-recipe target servings for scaling (not persisted)
+function renderRecipes(){
+  const root=$('#recipeList'); if(!root) return;
+  const all=live(state.recipes).filter(r=>r && r.name);
+  if(!all.length){ root.innerHTML=emptyState(bigIcon('pot'),'No recipes yet','Save a meal, tap ＋ New recipe, or import one (link/photo) from the meal planner — they all land here.'); return; }
+  const q=($('#recipeSearch')?.value||'').trim().toLowerCase();
+  const list=(q?all.filter(r=>r.name.toLowerCase().includes(q)):all).slice().sort((a,b)=>(b.usedAt||0)-(a.usedAt||0));
+  if(!list.length){ root.innerHTML=emptyState(bigIcon('search'),'No matches',`No recipes match “${esc(q)}”.`); return; }
+  root.innerHTML=list.map(recipeCard).join('');
+}
+function recipeCard(r){
+  const base=Number(r.servings)>0?Number(r.servings):0;
+  const target=recipeTarget[r.id]!=null?recipeTarget[r.id]:base;
+  const ingN=(r.ingredients||[]).length;
+  const meta=[];
+  if(Number(r.cookMins)>0) meta.push(`<svg class="mico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${r.cookMins} min`);
+  if(base>0) meta.push(`<svg class="mico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5.1A3 3 0 0 1 16 11M21 20a6 6 0 0 0-4.5-5.8"/></svg>serves ${base}`);
+  meta.push(`${ingN} ingredient${ingN===1?'':'s'}`);
+  const cost=recipeCost(r);
+  if(cost) meta.push(`≈ ${money(cost.total)}${cost.partial?'+':''}${base>0?` (${money(cost.total/base)}/serving)`:''}`);
+  const stepper = base>0
+    ? `<div class="qty" title="Servings to buy for"><button data-act="recserve-dec" data-rid="${r.id}" aria-label="Fewer servings">−</button><span class="n">${target}</span><button data-act="recserve-inc" data-rid="${r.id}" aria-label="More servings">+</button></div>`
+    : '';
+  return `<div class="rec-card">
+    <div class="rec-head"><span class="slot-dot slot-${esc(r.slot||'dinner')}"></span><span class="rec-name" data-act="editrecipe" data-rid="${r.id}">${esc(r.name)}</span></div>
+    <div class="rec-meta">${meta.join(' · ')}</div>
+    <div class="rec-actions">
+      <button class="mini-btn" data-act="recplan" data-rid="${r.id}" aria-label="Plan ${esc(r.name)}"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Plan</button>
+      ${stepper}
+      <button class="mini-btn sage" data-act="reclist" data-rid="${r.id}" aria-label="Send ${esc(r.name)} ingredients to list"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>List</button>
+      <button class="mini-btn" data-act="editrecipe" data-rid="${r.id}" aria-label="Edit ${esc(r.name)}"><svg class="bico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Edit</button>
+    </div>
+  </div>`;
+}
+function stepRecipeServe(rid,delta){
+  const r=live(state.recipes).find(x=>x.id===rid); if(!r) return;
+  const base=Number(r.servings)>0?Number(r.servings):1;
+  const cur=recipeTarget[rid]!=null?recipeTarget[rid]:base;
+  recipeTarget[rid]=Math.max(1,cur+delta);
+  renderRecipes();
+}
+// Open the meal planner prefilled, so the user can drop it on any day(s).
+function planRecipe(rid){
+  const r=live(state.recipes).find(x=>x.id===rid); if(!r) return;
+  switchView('meals'); openMeal(iso(new Date()),null); fillMealWith(r);
+}
+// Send a recipe's ingredients to the shopping list, scaled by the chosen servings.
+function recipeToList(rid){
+  const r=live(state.recipes).find(x=>x.id===rid); if(!r) return;
+  const ings=r.ingredients||[];
+  if(!ings.length){ toast('No ingredients on this recipe'); return; }
+  const base=Number(r.servings)>0?Number(r.servings):0;
+  const factor=base>0 ? (recipeTarget[rid]||base)/base : 1;
+  ings.forEach(g=>addToShopping(g.name, round3((parseFloat(g.qty)||1)*factor), g.cat||'other', g.unit||'each'));
+  commit();
+  toast(`Added ${ings.length} ingredient${ings.length>1?'s':''} to your list`+(factor!==1?` (×${round3(factor)})`:''));
+}
+function openRecipeEditor(rid){
+  const r=rid?live(state.recipes).find(x=>x.id===rid):null;
+  recipeCtx={id:r?r.id:null};
+  $('#recipeTitle').textContent=r?'Edit recipe':'New recipe';
+  $('#recName').value=r?r.name:'';
+  const slot=r?r.slot:'dinner';
+  $$('#recSlots .slot-pick').forEach(b=>b.classList.toggle('on',b.dataset.slot===slot));
+  $('#recCook').value=(r&&Number(r.cookMins)>0)?r.cookMins:'';
+  $('#recServes').value=(r&&Number(r.servings)>0)?r.servings:'';
+  renderRecIngs(r?(r.ingredients||[]):[]);
+  $('#recSteps').value=(r&&r.steps)?r.steps.join('\n'):'';
+  $('#recDelete').style.display=r?'block':'none';
+  $('#recipeOverlay').classList.add('show');
+  setTimeout(()=>$('#recName').focus(),120);
+}
+function renderRecIngs(ings){ $('#recIngList').innerHTML=(ings||[]).map(g=>ingRow(g.name,g.qty,g.unit,g.cat)).join(''); }
+function readRecIngs(){
+  return $$('#recIngList .ing-row').map(row=>({
+    name:$('.ing-name',row).value.trim(),
+    qty:$('.ing-qty',row).value.trim()||'1',
+    unit:($('.ing-unit',row)||{}).value||'each',
+    cat:'other'
+  })).filter(g=>g.name);
+}
+function recCurrentSlot(){ return ($('#recSlots .slot-pick.on')||{}).dataset?.slot||'dinner'; }
+function saveRecipeEdit(){
+  const name=$('#recName').value.trim(); if(!name){ toast('Give the recipe a name'); return; }
+  const ings=readRecIngs().map(g=>({name:g.name,qty:g.qty,cat:g.cat||'other',unit:g.unit||'each'}));
+  const steps=$('#recSteps').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const cookMins=Math.max(0,parseInt($('#recCook').value,10)||0);
+  const servings=Math.max(0,parseInt($('#recServes').value,10)||0);
+  const slot=recCurrentSlot();
+  let r = recipeCtx && recipeCtx.id ? state.recipes.find(x=>x.id===recipeCtx.id) : null;
+  if(r){ r.name=name; r.slot=slot; r.ingredients=ings; r.steps=steps; r.cookMins=cookMins; r.servings=servings; r.usedAt=Date.now(); touch(r); }
+  else { state.recipes.push({id:uid(),name,slot,ingredients:ings,steps,cookMins,servings,usedAt:Date.now(),updatedAt:now()}); }
+  closeRecipeEditor(); commit(); toast('Recipe saved');
+}
+function recEditorToList(){
+  const ings=readRecIngs();
+  if(!ings.length){ toast('Add some ingredients first'); return; }
+  ings.forEach(g=>addToShopping(g.name, parseFloat(g.qty)||1, g.cat||'other', g.unit||'each'));
+  commit(); toast(`Added ${ings.length} ingredient${ings.length>1?'s':''} to your list`);
+}
+function deleteRecipe(){
+  if(!recipeCtx || !recipeCtx.id){ closeRecipeEditor(); return; }
+  const id=recipeCtx.id, r=state.recipes.find(x=>x.id===id);
+  if(r) tomb(r);
+  closeRecipeEditor(); commit();
+  toast('Recipe deleted', r?{undo:()=>{ const rr=state.recipes.find(x=>x.id===id); if(rr){ touch(rr); commit(); } }}:undefined);
+}
+function closeRecipeEditor(){ $('#recipeOverlay').classList.remove('show'); }
+
+/* ---------- MONEY & PRICE INTELLIGENCE (#11) ----------
+   Built on the purchases log (fed by receipt scan #8). Powers monthly spend,
+   spend-by-aisle, per-item price history (avg, cheapest store, price-jump flag),
+   and cost-per-recipe estimates. */
+function money(n){ return '$'+(Math.round((Number(n)||0)*100)/100).toFixed(2); }
+function ym(d){ return String(d||'').slice(0,7); }                 // 'YYYY-MM'
+function purchaseUnit(p){ const q=Number(p.qty)>0?Number(p.qty):1; return (Number(p.price)||0)/q; }
+function spendByMonth(month){
+  let total=0; const byCat={};
+  live(state.purchases).forEach(p=>{
+    if(ym(p.date)!==month) return;
+    const amt=Number(p.price)||0; if(amt<=0) return;
+    total+=amt; byCat[p.cat||'other']=(byCat[p.cat||'other']||0)+amt;
+  });
+  return {total, byCat};
+}
+function priceStatsFor(name){
+  const n=String(name||'').toLowerCase();
+  const ps=live(state.purchases).filter(p=>String(p.name).toLowerCase()===n && Number(p.price)>0);
+  if(!ps.length) return null;
+  const units=ps.map(purchaseUnit);
+  const avg=units.reduce((a,b)=>a+b,0)/units.length;
+  let cheapest=Infinity, cheapestStore='';
+  ps.forEach(p=>{ const u=purchaseUnit(p); if(u<cheapest){ cheapest=u; cheapestStore=p.store||''; } });
+  const latest=ps.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)) || (b.updatedAt||0)-(a.updatedAt||0))[0];
+  const latestUnit=purchaseUnit(latest);
+  return { count:ps.length, avg, cheapest, cheapestStore, latestUnit, latestDate:latest.date, unit:latest.unit||'each',
+           jump: ps.length>=3 && latestUnit>avg*1.2 };
+}
+// Best estimate of an item's per-unit price: purchase history, else a manual pantry price.
+function latestUnitPrice(name){
+  const s=priceStatsFor(name); if(s) return s.latestUnit;
+  const p=live(state.pantry).find(i=>i.name.toLowerCase()===String(name).toLowerCase());
+  if(p && Number(p.price)>0) return Number(p.price);              // manual price is entered per unit
+  return null;
+}
+function recipeCost(r){
+  let total=0, known=0, n=0;
+  (r.ingredients||[]).forEach(g=>{ n++; const u=latestUnitPrice(g.name); if(u!=null){ total+=u*(parseFloat(g.qty)||1); known++; } });
+  if(!known) return null;
+  return { total, partial: known<n };
+}
+function openInsights(){ renderInsights(); $('#insightsOverlay').classList.add('show'); }
+function closeInsights(){ $('#insightsOverlay').classList.remove('show'); }
+function renderInsights(){
+  const body=$('#insightsBody'); if(!body) return;
+  const purchases=live(state.purchases);
+  if(!purchases.length){ body.innerHTML=emptyState(bigIcon('receipt'),'No spend tracked yet','Scan a receipt from the Pantry tab — confirmed prices show up here as monthly spend and price history.'); return; }
+  const d=new Date();
+  const thisMonth=iso(d).slice(0,7);
+  const lastMonth=iso(new Date(d.getFullYear(), d.getMonth()-1, 1)).slice(0,7);
+  const cur=spendByMonth(thisMonth), prev=spendByMonth(lastMonth);
+  let html=`<div class="ins-total"><div class="big">${money(cur.total)}</div><div class="sub2">spent this month · last month ${money(prev.total)}</div></div>`;
+  const cats=Object.keys(cur.byCat).sort((a,b)=>cur.byCat[b]-cur.byCat[a]);
+  if(cats.length){
+    const max=Math.max(...cats.map(c=>cur.byCat[c]));
+    html+=`<div class="ins-section-label">This month by aisle</div>`;
+    html+=cats.map(cid=>{ const c=catMap[cid]||{name:cid}; const amt=cur.byCat[cid]; const w=max>0?Math.round(amt/max*100):0;
+      return `<div class="ins-bar-row"><div class="ins-bar-head"><span class="ins-cat">${catIcon(cid)}${esc(c.name)}</span><span>${money(amt)}</span></div><div class="ins-bar"><span style="width:${w}%"></span></div></div>`; }).join('');
+  }
+  const totals={}; purchases.forEach(p=>{ if(Number(p.price)>0) totals[p.name]=(totals[p.name]||0)+Number(p.price); });
+  const names=Object.keys(totals).sort((a,b)=>totals[b]-totals[a]).slice(0,12);
+  if(names.length){
+    html+=`<div class="ins-section-label">Price history</div>`;
+    html+=names.map(nm=>{ const s=priceStatsFor(nm); if(!s) return '';
+      const cheap=s.cheapestStore?` · cheapest ${esc(s.cheapestStore)}`:'';
+      return `<div class="ins-item"><span class="nm">${esc(nm)}<div class="ins-cheap">avg ${money(s.avg)}/${esc(s.unit)}${cheap}</div></span>${s.jump?'<span class="jump">↑ up</span>':''}<span class="pr">${money(s.latestUnit)}</span></div>`;
+    }).join('');
+  }
+  body.innerHTML=html;
+}
+
+/* ---------- receipt scan ---------- */
+let receiptItems = [];
+// Shrink the photo before sending: faster, cheaper, and easier on the model.
+function fileToDownscaled(file, maxDim=1600, quality=0.82){
+  return new Promise((resolve,reject)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      const scale=Math.min(1, maxDim/Math.max(w,h));
+      w=Math.round(w*scale); h=Math.round(h*scale);
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      const dataUrl=c.toDataURL('image/jpeg',quality);
+      resolve(dataUrl.slice(dataUrl.indexOf(',')+1));
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src=url;
+  });
+}
+async function scanReceipt(file){
+  if(!file) return;
+  if(!WORKER_URL){ toast('Add your Worker URL first — see RECEIPT-SETUP.md'); return; }
+  toast('Reading your receipt…');
+  try{
+    const b64=await fileToDownscaled(file);
+    const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:b64, mediaType:'image/jpeg'})});
+    if(!res.ok) throw new Error('worker '+res.status);
+    const data=await res.json();
+    const items=Array.isArray(data)?data:(data&&Array.isArray(data.items)?data.items:[]);
+    if(!items.length){ toast('No items found — try a clearer photo'); return; }
+    openReceiptReview(items);
+  }catch(e){ console.error('receipt scan failed',e); toast('Couldn’t read that receipt — try again'); }
+}
+// Read a photo of a handwritten/typed shopping list and drop it into the same
+// review screen as the receipt scan, but pointed at the shopping list. Same
+// Worker, mode:'list'. (Backlog: handwritten-list import.)
+async function scanHandwrittenList(file){
+  if(!file) return;
+  if(!WORKER_URL){ toast('Add your Worker URL first — see RECEIPT-SETUP.md'); return; }
+  toast('Reading your list…');
+  try{
+    const b64=await fileToDownscaled(file);
+    const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:'list', image:b64, mediaType:'image/jpeg'})});
+    if(!res.ok) throw new Error('worker '+res.status);
+    const data=await res.json();
+    const items=Array.isArray(data)?data:(data&&Array.isArray(data.items)?data.items:[]);
+    if(!items.length){ toast('No items found — try a clearer photo'); return; }
+    openReceiptReview(items,{
+      dest:'shopping',
+      title:'Review your list',
+      sub:'Untick anything you don’t want, fix a name or aisle if needed, then add.',
+      showStore:false
+    });
+  }catch(e){ console.error('list scan failed',e); toast('Couldn’t read that list — try again'); }
+}
+function catOptions(sel){
+  return CATEGORIES.map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>${c.name}</option>`).join('');
+}
+function openReceiptReview(items,opts){
+  opts=opts||{};
+  receiptItems=items.map(it=>({
+    name:String((it&&it.name)||'').trim(),
+    qty:(Number(it&&it.qty)>0?Number(it.qty):1),
+    unit:(it&&it.unit)||'each',
+    cat:CATEGORIES.some(c=>c.id===(it&&it.cat))?it.cat:'other',
+    price:Number(it&&it.price)||0
+  })).filter(it=>it.name);
+  // Heading + subtitle (receipt scan vs handwritten list reuse this modal).
+  $('#receiptTitle').textContent=opts.title||'Review your receipt';
+  $('#receiptSub').textContent=opts.sub||'Untick anything you don’t want, fix a name or aisle if needed, then add.';
+  // Default destination toggle (receipts -> pantry, lists -> shopping).
+  const dest=opts.dest==='shopping'?'shopping':'pantry';
+  $$('#receiptDest .slot-pick').forEach(b=>b.classList.toggle('on',b.dataset.dest===dest));
+  // Store picker is only meaningful for receipts (price history); hide it otherwise.
+  const showStore=opts.showStore!==false;
+  const storeField=$('#receiptStoreField');
+  if(storeField) storeField.style.display=showStore?'':'none';
+  const sel=$('#receiptStore');
+  if(sel){ sel.innerHTML='<option value="">Any store</option>'+state.stores.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join(''); }
+  renderReceiptRows();
+  $('#receiptOverlay').classList.add('show');
+}
+function renderReceiptRows(){
+  const root=$('#receiptList');
+  if(!receiptItems.length){ root.innerHTML='<div class="sub" style="margin:0">No items found — try a clearer photo.</div>'; return; }
+  root.innerHTML=receiptItems.map((it,idx)=>`<div class="rcpt-row" data-idx="${idx}" data-price="${it.price}">
+    <button class="check on" data-act="rtoggle" title="Include this item"><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></button>
+    <input class="rcpt-name" type="text" value="${esc(it.name)}" />
+    ${it.price>0?`<span class="rcpt-price">$${it.price.toFixed(2)}</span>`:''}
+    <input class="rcpt-qty" type="text" inputmode="decimal" value="${esc(String(it.qty))}" />
+    <select class="rcpt-unit">${unitOptions(it.unit)}</select>
+    <select class="rcpt-cat">${catOptions(it.cat)}</select>
+  </div>`).join('');
+}
+function confirmReceipt(){
+  const dest=($('#receiptDest .slot-pick.on')||{}).dataset?.dest||'pantry';
+  const store=($('#receiptStore')||{}).value||'';
+  const today=iso(new Date());
+  let added=0, logged=0;
+  state.purchases=state.purchases||[];
+  $$('#receiptList .rcpt-row').forEach(r=>{
+    if(r.classList.contains('off')) return;
+    const name=$('.rcpt-name',r).value.trim(); if(!name) return;
+    const qty=Math.max(0,parseFloat($('.rcpt-qty',r).value)||0)||1;
+    const unit=($('.rcpt-unit',r)||{}).value||'each';
+    const cat=($('.rcpt-cat',r)||{}).value||'other';
+    const price=parseFloat(r.dataset.price)||0;
+    learnPack(name,qty,unit);                 // refine pack size from real measured purchases
+    if(dest==='pantry'){
+      addPantryStock(name,qty,unit,cat);
+      const p=state.pantry.find(i=>!i.deleted && i.name.toLowerCase()===name.toLowerCase());
+      if(p && price>0){ p.price=price; touch(p); }
+    }else{
+      addToShopping(name,qty,cat,unit);
+      const li=state.shopping.find(i=>!i.deleted && !i.checked && i.name.toLowerCase()===name.toLowerCase());
+      if(li && price>0){ li.price=price; touch(li); }
+    }
+    if(price>0){ state.purchases.push({id:uid(),name,price,qty,unit,cat,store,date:today,updatedAt:now()}); logged++; }   // #11 price history
+    added++;
+  });
+  if(!added){ toast('Nothing ticked to add'); return; }
+  closeReceipt(); commit();
+  switchView(dest==='pantry'?'pantry':'shopping');
+  toast(`Added ${added} item${added>1?'s':''}`+(logged?` · logged ${logged} price${logged>1?'s':''}`:''));
+}
+function closeReceipt(){ $('#receiptOverlay').classList.remove('show'); }
+
+/* ---------- recipe import (link or photo) ----------
+   Reuses the receipt vision broker (same Worker). The Worker fetches a URL
+   server-side (no browser CORS) or reads a cookbook photo, and returns a tidy
+   {name, slot, ingredients, steps}. Results drop straight into the open meal
+   modal so nothing has to be retyped. (Backlog #12) */
+async function importRecipeFromUrl(){
+  if(!WORKER_URL){ toast('Add your Worker URL first — see RECEIPT-SETUP.md'); return; }
+  const url=$('#importUrl').value.trim();
+  if(!url){ toast('Paste a recipe link first'); return; }
+  if(!/^https?:\/\//i.test(url)){ toast('That doesn’t look like a web link'); return; }
+  toast('Reading that recipe…');
+  try{
+    const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:'recipe', url})});
+    const data=await res.json().catch(()=>null);
+    if(!res.ok || !data || data.error) throw new Error((data&&data.error)||('worker '+res.status));
+    applyImportedRecipe(data);
+  }catch(e){ console.error('recipe import failed',e); toast('Couldn’t read that link — try the photo option'); }
+}
+async function importRecipeFromPhoto(file){
+  if(!file) return;
+  if(!WORKER_URL){ toast('Add your Worker URL first — see RECEIPT-SETUP.md'); return; }
+  toast('Reading that page…');
+  try{
+    const b64=await fileToDownscaled(file);
+    const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:'recipe', image:b64, mediaType:'image/jpeg'})});
+    const data=await res.json().catch(()=>null);
+    if(!res.ok || !data || data.error) throw new Error((data&&data.error)||('worker '+res.status));
+    applyImportedRecipe(data);
+  }catch(e){ console.error('recipe photo import failed',e); toast('Couldn’t read that page — try a clearer photo'); }
+}
+// Fill the (already open) meal modal from a recipe-like object {name,slot,ingredients,steps}.
+function fillMealWith(r){
+  r=r||{};
+  const ings=Array.isArray(r.ingredients)?r.ingredients:[];
+  if(r.name) $('#mealName').value=String(r.name).trim();
+  const slot=(r.slot && SLOTS[r.slot])?r.slot:'dinner';
+  $$('#mealSlots .slot-pick').forEach(b=>b.classList.toggle('on',b.dataset.slot===slot));
+  renderIngs(ings.map(g=>({name:g.name,qty:g.qty,unit:g.unit||'each',cat:g.cat||'other'})));
+  mealSteps=Array.isArray(r.steps)?r.steps.map(s=>String(s||'').trim()).filter(Boolean):[];
+  renderSteps();
+}
+// Drop an imported recipe into the (already open) meal modal.
+function applyImportedRecipe(r){
+  r=r||{};
+  const ings=Array.isArray(r.ingredients)?r.ingredients:[];
+  const name=String(r.name||'').trim();
+  if(!name && !ings.length){ toast('No recipe found there — try the photo option'); return; }
+  fillMealWith(r);
+  $('#importUrl').value='';
+  const n=ings.length;
+  toast(n?`Imported — ${n} ingredient${n>1?'s':''}${mealSteps.length?' + steps':''}. Check, then save.`:'Imported recipe — check, then save.');
+}
+
+/* recentMealNames — recently eaten meals (last 8 days) to avoid repeating;
+   used by the recipe-idea prompt builder and the weekly planner. */
+function recentMealNames(){
+  const names=new Set();
+  for(let d=0; d<=7; d++){
+    live(state.meals[iso(addDays(new Date(), -d))]).forEach(m=>{ if(m.name) names.add(m.name); });
+  }
+  return [...names].slice(0,40);
+}
+/* ---------- Recipe ideas via copy-paste prompt (no API / Worker) ----------
+   Builds a ready-to-paste prompt from the current pantry and copies it to the
+   clipboard, so you can paste it into any AI (ChatGPT, Claude, Gemini…) and get
+   recipes back for free. The reply pastes back via "Paste AI recipes": the
+   prompt asks the AI to end with a JSON block in the app's recipe shape, which
+   we read and drop straight into the library. Replaces the Worker-powered
+   "What's for dinner?" suggester. */
+const RECIPE_CATS  = ['produce','dairy','meat','bakery','frozen','pantry','beverages','snacks','household','other'];
+const RECIPE_UNITS = ['each','pieces','g','kg','ml','L','pack','bag','box','can','bottle','bunch','dozen'];
+const RECIPE_SLOTS = ['breakfast','lunch','dinner','snack'];
+
+function pantryPromptLines(){
+  return live(state.pantry).map(p=>{
+    const nm=String(p.name||'').trim(); if(!nm) return null;
+    const qty=(p.qty!=null && p.qty!=='')?p.qty:'';
+    const unit=p.unit||'each';
+    const amt = qty!=='' ? `: ${qty}${unit==='each'?'':' '+unit}` : '';
+    const flags=[];
+    const d=daysLeft(p);
+    if(typeof d==='number'){ if(d<=0) flags.push('EXPIRING NOW'); else if(d<=3) flags.push(`use within ${d}d`); }
+    if(isLow(p)) flags.push('low');
+    const tag = flags.length?` (${flags.join(', ')})`:'';
+    return `- ${nm}${amt}${tag}`;
+  }).filter(Boolean).join('\n');
+}
+
+function buildRecipePrompt(){
+  const lines=pantryPromptLines();
+  const recent=recentMealNames();
+  const prefs=(state.prefs||'').trim();
+  let p='';
+  p+=`You are a practical home cook. Suggest 4-6 recipes I could realistically make from what I have at home right now. Assume I have basic staples (salt, pepper, oil, water).\n\n`;
+  p+=`Favour recipes that use what I already have - ESPECIALLY anything flagged "EXPIRING NOW" or "use within Nd" (use these up first to avoid waste), then items flagged "low". It's fine if a recipe needs a few extra items I'd buy, but prefer ones where I already have most ingredients.\n\n`;
+  p+=`MY PANTRY:\n${lines||'(empty)'}\n`;
+  if(recent.length) p+=`\nRECENTLY EATEN (please don't repeat these): ${recent.join(', ')}\n`;
+  if(prefs) p+=`\nDIETARY PREFERENCES: ${prefs}\n`;
+  p+=`\nFor EACH recipe, first give me a readable version: the name, a one-line reason it's a good pick, the ingredients with amounts (note which ones I already have), and short numbered steps.\n`;
+  p+=`\nTHEN, at the very end of your reply, output a SINGLE JSON code block (\`\`\`json … \`\`\`) containing ALL the recipes as an array, so I can import them. Use EXACTLY this shape and these allowed values:\n`;
+  p+=`[\n  {\n    "name": "Spaghetti bolognese",\n    "slot": "dinner",\n    "cookMins": 30,\n    "servings": 2,\n    "ingredients": [ {"name": "onion", "qty": 1, "unit": "each", "cat": "produce"} ],\n    "steps": ["Step one.", "Step two."]\n  }\n]\n`;
+  p+=`\nRules for the JSON:\n`;
+  p+=`- "slot" must be one of: ${RECIPE_SLOTS.join(', ')}.\n`;
+  p+=`- "cat" must be one of: ${RECIPE_CATS.join(', ')}.\n`;
+  p+=`- "unit" must be one of: ${RECIPE_UNITS.join(', ')} (use "each" for whole/countable items; convert cup/tbsp/tsp/oz/lb to g or ml where reasonable, otherwise "each").\n`;
+  p+=`- "qty" is a number (convert fractions to decimals, ½ -> 0.5; default 1). "cookMins" and "servings" are numbers (estimate if unsure).\n`;
+  p+=`- ingredient "name" is the plain food name only - no amounts or prep words.\n`;
+  p+=`- Output ONLY valid JSON inside that one code block: no comments, no trailing commas.\n`;
+  return p;
+}
+
+async function copyToClipboard(text){
+  try{ if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); return true; } }catch(e){}
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.top='-1000px';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,text.length);
+    const ok=document.execCommand('copy'); document.body.removeChild(ta); return ok;
+  }catch(e){ return false; }
+}
+
+async function copyRecipePrompt(){
+  if(!live(state.pantry).length){ toast('Add a few things to your pantry first'); return; }
+  const ok=await copyToClipboard(buildRecipePrompt());
+  toast(ok?'Prompt copied — paste it into ChatGPT, Claude or any AI':'Couldn’t copy — try again');
+}
+
+// Pull the recipe array out of the AI's reply. Prefers a ```json fence, then a
+// bare parse, then the first […] that parses. Accepts {recipes:[…]} too.
+function tryParseRecipes(str){
+  try{ const v=JSON.parse(String(str).trim()); return Array.isArray(v)?v:(v&&Array.isArray(v.recipes)?v.recipes:null); }catch(e){ return null; }
+}
+function extractRecipeArray(text){
+  const t=String(text||'');
+  const fence=t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if(fence){ const a=tryParseRecipes(fence[1]); if(a) return a; }
+  const whole=tryParseRecipes(t); if(whole) return whole;
+  const s=t.indexOf('['), e=t.lastIndexOf(']');
+  if(s!==-1 && e!==-1 && e>s){ const a=tryParseRecipes(t.slice(s,e+1)); if(a) return a; }
+  return null;
+}
+function clampImportedRecipe(rec){
+  rec=rec||{};
+  const name=String(rec.name||'').trim(); if(!name) return null;
+  const slot=RECIPE_SLOTS.includes(rec.slot)?rec.slot:'dinner';
+  let ings=Array.isArray(rec.ingredients)?rec.ingredients:[];
+  ings=ings.map(g=>({
+    name:String((g&&g.name)||'').trim(),
+    qty:Number(g&&g.qty)>0?Number(g.qty):1,
+    unit:RECIPE_UNITS.includes(g&&g.unit)?g.unit:'each',
+    cat:RECIPE_CATS.includes(g&&g.cat)?g.cat:'other',
+  })).filter(g=>g.name).slice(0,80);
+  const steps=(Array.isArray(rec.steps)?rec.steps:[]).map(s=>String(s||'').trim()).filter(Boolean).slice(0,50);
+  const cookMins=Math.max(0,parseInt(rec.cookMins,10)||0);
+  const servings=Math.max(0,parseInt(rec.servings,10)||0);
+  return {name,slot,ingredients:ings,steps,cookMins,servings};
+}
+// Add an imported recipe, or update the existing one with the same name.
+function addImportedRecipe(c){
+  state.recipes=state.recipes||[];
+  const key=c.name.toLowerCase();
+  const existing=state.recipes.find(r=>!r.deleted && String(r.name).toLowerCase()===key);
+  if(existing){
+    existing.slot=c.slot; existing.ingredients=c.ingredients;
+    if(c.steps.length) existing.steps=c.steps;
+    if(c.cookMins) existing.cookMins=c.cookMins;
+    if(c.servings) existing.servings=c.servings;
+    existing.usedAt=Date.now(); touch(existing);
+    return 'updated';
+  }
+  state.recipes.push({id:uid(),name:c.name,slot:c.slot,ingredients:c.ingredients,steps:c.steps,cookMins:c.cookMins,servings:c.servings,usedAt:Date.now(),updatedAt:now()});
+  return 'added';
+}
+function openPasteRecipe(){ const t=$('#pasteRecipeText'); if(t) t.value=''; $('#pasteRecipeOverlay').classList.add('show'); }
+function closePasteRecipe(){ $('#pasteRecipeOverlay').classList.remove('show'); }
+function doPasteRecipeImport(){
+  const text=$('#pasteRecipeText').value||'';
+  if(!text.trim()){ toast('Paste the AI’s reply first'); return; }
+  const arr=extractRecipeArray(text);
+  if(!arr || !arr.length){ toast('Couldn’t find recipes — make sure you include the JSON block'); return; }
+  let added=0, updated=0;
+  arr.forEach(r=>{ const c=clampImportedRecipe(r); if(!c) return; const res=addImportedRecipe(c); if(res==='added') added++; else updated++; });
+  if(!added && !updated){ toast('No valid recipes found in that text'); return; }
+  commit();
+  if(activeView==='recipes') renderRecipes();
+  closePasteRecipe();
+  const parts=[]; if(added) parts.push(`${added} added`); if(updated) parts.push(`${updated} updated`);
+  toast(`${parts.join(', ')} to your recipes`);
+}
+
+/* ---------- empty state ---------- */
+function emptyState(em,title,sub){
+  return `<div class="empty"><span class="big">${em}</span><div style="font-size:1.05rem;color:var(--ink);margin-bottom:4px">${title}</div>${sub}</div>`;
+}
+
+/* ---------- view switching ---------- */
+function switchView(v){
+  activeView=v;
+  $$('.view').forEach(s=>s.classList.toggle('active',s.id==='view-'+v));
+  $$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===v));
+  renderActive();
+}
+function renderActive(){
+  if(activeView==='shopping') renderShopping();
+  else if(activeView==='pantry') renderPantry();
+  else if(activeView==='recipes') renderRecipes();
+  else renderMeals();
+}
+function updateBadges(){
+  const n=live(state.shopping).filter(i=>!i.checked).length;
+  const b=$('#shopCount');
+  if(n>0){ b.textContent=n; b.style.display='flex'; } else b.style.display='none';
+}
+
+/* ---------- event delegation for lists ---------- */
+function findItem(list,id){ return state[list].find(i=>i.id===id && !i.deleted); }
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-act]');
+  if(!btn) return;
+  const act=btn.dataset.act;
+  const li=btn.closest('[data-id]');
+
+  // list item actions
+  if(li && li.dataset.list){
+    const list=li.dataset.list, item=findItem(list,li.dataset.id);
+    if(!item) return;
+    if(act==='toggle'){ item.checked=!item.checked; touch(item); if(list==='shopping') handleRestock(item); commit(); return; }
+    if(act==='inc'){ const s=Number(item.pack)||unitStep(item.unit); item.qty=round3((item.qty??1)+s); if(list==='pantry'){ bumpFull(item); if(!almostGone(item)) item.autoListed=false; } touch(item); commit(); return; }
+    if(act==='dec'){ const s=Number(item.pack)||unitStep(item.unit); const min=list==='pantry'?0:s; item.qty=Math.max(min,round3((item.qty??1)-s)); touch(item); commit(); return; }
+    if(act==='del'){ const id=item.id, nm=item.name; tomb(item); commit(); toast(`Removed “${nm}”`,{undo:()=>{ const it=state[list].find(x=>x.id===id); if(it){ touch(it); commit(); } }}); return; }
+    if(act==='low'){ item.low=!item.low; touch(item); commit(); return; }
+    if(act==='staple'){ toggleStaple(item); return; }
+    if(act==='topantrylist'){ addShop(item.name,item.cat,defaultStoreFor(item.name)); toast(item.name+' added to list'); return; }
+    if(act==='setstore'){ openStoreModal(item.id); return; }
+    if(act==='editpantry'){ openPantryEditor(item.id); return; }
+  }
+  // global actions
+  if(act==='usemeal'){ fillMealFromRecipe(btn.dataset.rid); return; }
+  if(act==='toggleday'){ btn.classList.toggle('on'); return; }
+  if(act==='cooknow'){ addRecipeToToday(btn.dataset.rid); return; }
+  if(act==='addstaple'){ addStapleToList(btn.dataset.name); return; }
+  if(act==='delstaple'){ removeStaple(btn.dataset.name); return; }
+  if(act==='addallstaples'){ addAllStaples(); return; }
+  if(act==='editrecipe'){ openRecipeEditor(btn.dataset.rid); return; }
+  if(act==='recplan'){ planRecipe(btn.dataset.rid); return; }
+  if(act==='reclist'){ recipeToList(btn.dataset.rid); return; }
+  if(act==='recserve-dec'){ stepRecipeServe(btn.dataset.rid,-1); return; }
+  if(act==='recserve-inc'){ stepRecipeServe(btn.dataset.rid,1); return; }
+  if(act==='editaisles'){ openAisleEditor(btn.dataset.store||''); return; }
+  if(act==='aisle-up'){ moveAisle(btn.dataset.cat,-1); return; }
+  if(act==='aisle-down'){ moveAisle(btn.dataset.cat,1); return; }
+  if(act==='pickstore'){ applyStore(btn.dataset.store); return; }
+  if(act==='forgetdef'){ const d=state.itemDefaults&&state.itemDefaults[btn.dataset.name]; if(d) tomb(d); commit(); renderItemDefaults(); toast('Forgotten'); return; }
+  if(act==='clear-checked'){
+    const ids=live(state.shopping).filter(i=>i.checked).map(i=>i.id);
+    ids.forEach(id=>{ const it=state.shopping.find(x=>x.id===id); if(it) tomb(it); }); commit();
+    toast('Cart cleared', ids.length?{undo:()=>{ ids.forEach(id=>{ const it=state.shopping.find(x=>x.id===id); if(it) touch(it); }); commit(); }}:undefined);
+    return;
+  }
+  if(act==='addmeal'){ openMeal(btn.dataset.key,null); return; }
+  if(act==='editmeal'){ openMeal(btn.dataset.key,btn.dataset.mid); return; }
+  if(act==='delIng'){ btn.closest('.ing-row').remove(); return; }
+  if(act==='rtoggle'){ const row=btn.closest('.rcpt-row'); if(row){ row.classList.toggle('off'); const off=row.classList.contains('off'); btn.classList.toggle('on',!off); } return; }
+});
+
+// change a per-item default store from the Settings editor
+document.addEventListener('change',e=>{
+  const sel=e.target.closest('.def-store');
+  if(!sel) return;
+  const row=sel.closest('.def-row'); if(!row) return;
+  const key=row.dataset.name;
+  if(state.itemDefaults && state.itemDefaults[key]){ state.itemDefaults[key].store=sel.value; touch(state.itemDefaults[key]); commit(); toast('Default saved'); }
+});
+
+/* ---------- wire up controls ---------- */
+function init(){
+  fillCatSelect($('#shopCat'));
+  fillCatSelect($('#pantryCat'));
+
+  // tabs
+  $$('button.tab').forEach(t=>t.addEventListener('click',()=>switchView(t.dataset.view)));
+
+  // shopping add
+  fillStoreSelect($('#shopStore'));
+  fillUnitSelect($('#shopUnit'));
+  const shopGo=()=>{
+    const nm=$('#shopInput').value.trim();
+    const cat=$('#shopCat').value;
+    const unit=$('#shopUnit').value;
+    let st=$('#shopStore').value; if(st==='__new__') st='';
+    const pk = nm ? packFor(nm) : null;   // don't let a pack's unit bleed into the next item
+    if(nm){ rememberItem(nm,st,cat,unit); sticky={store:st,cat,unit:pk?'each':unit}; saveSticky(); }
+    addShop(nm,cat,st,unit);
+    $('#shopInput').value=''; pickerTouched=false; autofillPickers(); $('#shopInput').focus();
+  };
+  $('#shopAdd').addEventListener('click',shopGo);
+  $('#shopInput').addEventListener('keydown',e=>{if(e.key==='Enter')shopGo();});
+  $('#shopInput').addEventListener('input',()=>{ if($('#shopInput').value.trim()==='') pickerTouched=false; autofillPickers(); });
+  $('#shopStore').addEventListener('change',e=>{ pickerTouched=true; if(e.target.value==='__new__'){ e.target.value=''; openStoreModal(null); } });
+  $('#shopCat').addEventListener('change',()=>{ pickerTouched=true; });
+  $('#shopUnit').addEventListener('change',()=>{ pickerTouched=true; });
+  autofillPickers();
+
+  // store chooser modal
+  $('#addStoreBtn').addEventListener('click',createStoreFromInput);
+  $('#newStoreName').addEventListener('keydown',e=>{if(e.key==='Enter')createStoreFromInput();});
+  $('#storeCancel').addEventListener('click',closeStore);
+  $('#storeOverlay').addEventListener('click',e=>{if(e.target.id==='storeOverlay')closeStore();});
+
+  // aisle-order editor (#10)
+  $('#aisleSave')?.addEventListener('click',saveAisleOrder);
+  $('#aisleReset')?.addEventListener('click',resetAisleOrder);
+  $('#aisleCancel')?.addEventListener('click',closeAisle);
+  $('#aisleOverlay')?.addEventListener('click',e=>{if(e.target.id==='aisleOverlay')closeAisle();});
+
+  // spend & price insights (#11)
+  $('#insightsBtn')?.addEventListener('click',openInsights);
+  $('#insightsCancel')?.addEventListener('click',closeInsights);
+  $('#insightsOverlay')?.addEventListener('click',e=>{if(e.target.id==='insightsOverlay')closeInsights();});
+
+  // pantry add
+  fillUnitSelect($('#pantryUnit'));
+  const panGo=()=>{ addPantry($('#pantryInput').value,$('#pantryCat').value,$('#pantryUnit').value); $('#pantryInput').value=''; pantryCatTouched=false; $('#pantryInput').focus(); };
+  $('#pantryAdd').addEventListener('click',panGo);
+  $('#pantryInput').addEventListener('keydown',e=>{if(e.key==='Enter')panGo();});
+  $('#pantryInput').addEventListener('input',()=>{ if($('#pantryInput').value.trim()==='') pantryCatTouched=false; autofillPantryCat(); });
+  $('#pantryCat').addEventListener('change',()=>{ pantryCatTouched=true; });
+
+  // list search (#2)
+  $('#shopSearch')?.addEventListener('input',renderShopping);
+  $('#pantrySearch')?.addEventListener('input',renderPantry);
+
+  // reminders (#6): re-check whenever the app comes back into view
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') runReminders(); });
+
+  // week nav + planning tools
+  $('#weekPrev').addEventListener('click',()=>{weekStart=addDays(weekStart,-7);renderMeals();});
+  $('#weekNext').addEventListener('click',()=>{weekStart=addDays(weekStart,7);renderMeals();});
+  $('#weekToList').addEventListener('click',planWeekToList);
+  $('#copyWeek').addEventListener('click',copyWeekToNext);
+
+  // plan my week (#9)
+  $('#planWeekBtn').addEventListener('click',openPlan);
+  $$('#planCadence .slot-pick').forEach(b=>b.addEventListener('click',()=>{ $$('#planCadence .slot-pick').forEach(x=>x.classList.remove('on')); b.classList.add('on'); }));
+  $$('#planOpts .slot-pick').forEach(b=>b.addEventListener('click',()=>{ const on=b.classList.toggle('on'); b.setAttribute('aria-pressed',on?'true':'false'); }));
+  $('#planGo').addEventListener('click',()=>doPlan(false));
+  $('#planGoList').addEventListener('click',()=>doPlan(true));
+  $('#planCancel').addEventListener('click',closePlan);
+  $('#planOverlay').addEventListener('click',e=>{if(e.target.id==='planOverlay')closePlan();});
+
+  // recipes view + editor (#3)
+  $('#addRecipeBtn')?.addEventListener('click',()=>openRecipeEditor(null));
+  $('#recipeSearch')?.addEventListener('input',renderRecipes);
+  $$('#recSlots .slot-pick').forEach(b=>b.addEventListener('click',()=>{ $$('#recSlots .slot-pick').forEach(x=>x.classList.remove('on')); b.classList.add('on'); }));
+  $('#recAddIng')?.addEventListener('click',()=>{ $('#recIngList').insertAdjacentHTML('beforeend',ingRow()); });
+  $('#recSave')?.addEventListener('click',saveRecipeEdit);
+  $('#recToList')?.addEventListener('click',recEditorToList);
+  $('#recDelete')?.addEventListener('click',deleteRecipe);
+  $('#recCancel')?.addEventListener('click',closeRecipeEditor);
+  $('#recipeOverlay')?.addEventListener('click',e=>{if(e.target.id==='recipeOverlay')closeRecipeEditor();});
+
+  // pantry item editor
+  $('#pEditSave').addEventListener('click',savePantryEdit);
+  $('#pEditCancel').addEventListener('click',closePantryEditor);
+  $('#pEditPct').addEventListener('input',syncQtyFromPct);
+  $('#pEditQty').addEventListener('input',syncPctFromQty);
+  $('#pEditFull').addEventListener('input',syncPctFromQty);
+  $('#pantryOverlay').addEventListener('click',e=>{if(e.target.id==='pantryOverlay')closePantryEditor();});
+
+  // meal modal
+  $$('#mealSlots .slot-pick').forEach(b=>b.addEventListener('click',()=>{
+    $$('#mealSlots .slot-pick').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  }));
+  $('#addIng').addEventListener('click',()=>{ $('#ingList').insertAdjacentHTML('beforeend',ingRow()); });
+  $('#mealSave').addEventListener('click',saveMeal);
+  $('#mealDelete').addEventListener('click',deleteMeal);
+  $('#mealCook').addEventListener('click',cookMeal);
+  $('#mealToList').addEventListener('click',mealIngsToList);
+  $('#mealCancel').addEventListener('click',closeMeal);
+  $('#mealOverlay').addEventListener('click',e=>{if(e.target.id==='mealOverlay')closeMeal();});
+
+  // receipt scan
+  const scanBtn=$('#scanReceiptBtn');
+  if(scanBtn){
+    if(!WORKER_URL) scanBtn.style.display='none';
+    scanBtn.addEventListener('click',()=>$('#receiptFile').click());
+    $('#receiptFile').addEventListener('change',e=>{ scanReceipt(e.target.files[0]); e.target.value=''; });
+  }
+
+  // handwritten-list scan (Shopping view) — same Worker, mode:'list'
+  const listBtn=$('#scanListBtn');
+  if(listBtn){
+    if(!WORKER_URL) listBtn.style.display='none';
+    listBtn.addEventListener('click',()=>$('#listFile').click());
+    $('#listFile').addEventListener('change',e=>{ scanHandwrittenList(e.target.files[0]); e.target.value=''; });
+  }
+
+  // recipe import (meal modal) — same Worker as the receipt scan
+  const importField=$('#importField');
+  if(importField && !WORKER_URL) importField.style.display='none';
+  $('#importUrlBtn')?.addEventListener('click',importRecipeFromUrl);
+  $('#importUrl')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();importRecipeFromUrl();}});
+  $('#importPhotoBtn')?.addEventListener('click',()=>$('#importPhotoFile').click());
+  $('#importPhotoFile')?.addEventListener('change',e=>{ importRecipeFromPhoto(e.target.files[0]); e.target.value=''; });
+
+  // recipe ideas via copy-paste prompt (replaces the Worker "what's for dinner?")
+  $('#suggestBtn')?.addEventListener('click',copyRecipePrompt);
+  $('#genRecipeBtn')?.addEventListener('click',copyRecipePrompt);
+  $('#pasteRecipeBtn')?.addEventListener('click',openPasteRecipe);
+  $('#pasteRecipeImport')?.addEventListener('click',doPasteRecipeImport);
+  $('#pasteRecipeCancel')?.addEventListener('click',closePasteRecipe);
+  $('#pasteRecipeOverlay')?.addEventListener('click',e=>{if(e.target.id==='pasteRecipeOverlay')closePasteRecipe();});
+  $$('#receiptDest .slot-pick').forEach(b=>b.addEventListener('click',()=>{
+    $$('#receiptDest .slot-pick').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  }));
+  $('#receiptConfirm').addEventListener('click',confirmReceipt);
+  $('#receiptCancel').addEventListener('click',closeReceipt);
+  $('#receiptOverlay').addEventListener('click',e=>{if(e.target.id==='receiptOverlay')closeReceipt();});
+
+  // settings
+  $('#settingsBtn').addEventListener('click',openSettings);
+  $('#setCancel').addEventListener('click',()=>$('#setOverlay').classList.remove('show'));
+  $('#setSave').addEventListener('click',saveSettings);
+  $('#setOverlay').addEventListener('click',e=>{if(e.target.id==='setOverlay')$('#setOverlay').classList.remove('show');});
+
+  // backup export / restore
+  $('#exportBtn').addEventListener('click',exportBackup);
+  $('#importBtn').addEventListener('click',()=>$('#importFile').click());
+  $('#importFile').addEventListener('change',e=>{ importBackup(e.target.files[0]); e.target.value=''; });
+
+  // first-run welcome
+  $('#welcomeStart').addEventListener('click',finishWelcome);
+  $('#welcomeCode').addEventListener('keydown',e=>{if(e.key==='Enter')finishWelcome();});
+  if(isFirstRun) showWelcome();
+
+  updateSyncStatus();
+}
+
+function updateSyncStatus(){
+  const el=$('#syncStatus');
+  if(DB.mode==='cloud') el.innerHTML=`<span class="sync-dot cloud"></span>Synced · ${esc(household)}`;
+  else el.innerHTML=`<span class="sync-dot"></span>This device only`;
+}
+function openSettings(){
+  $('#setHousehold').value=household;
+  $('#setNote').innerHTML = cloudOn
+    ? (DB.mode==='cloud'
+        ? 'Live sync is ON. Anyone using this same code sees the same lists.'
+        : 'Sync keys are set but the connection failed — check your internet.')
+    : 'Live sync isn\'t set up yet, so data stays on this device. See SETUP-GUIDE.md to link both phones.';
+  $('#setRestock').checked = state.autoRestock!==false;
+  $('#setAutoList').checked = state.autoList!==false;
+  $('#setAutoListPct').value = Math.round((state.autoListPct>0?state.autoListPct:0.10)*100);
+  $('#setPredict').checked = state.predict!==false;
+  $('#setPredictLead').value = state.predictLead>0?state.predictLead:3;
+  $('#setNotify').checked = state.notify===true;
+  $('#setNotifyLead').value = state.notifyLead>0?state.notifyLead:2;
+  $('#setPrefs').value = state.prefs||'';
+  renderItemDefaults();
+  $('#setOverlay').classList.add('show');
+}
+function saveSettings(){
+  const ar=$('#setRestock').checked;
+  if(ar!==state.autoRestock){ state.autoRestock=ar; state.autoRestockAt=now(); }
+  const al=$('#setAutoList').checked;
+  let pct=Math.min(100,Math.max(1,Math.round(parseFloat($('#setAutoListPct').value)||10)))/100;
+  if(al!==state.autoList || Math.abs(pct-(state.autoListPct||0.10))>1e-9){ state.autoList=al; state.autoListPct=pct; state.autoListAt=now(); }
+  const pf=$('#setPrefs').value.trim();
+  if(pf!==(state.prefs||'')){ state.prefs=pf; state.prefsAt=now(); }
+  const pr=$('#setPredict').checked;
+  const lead=Math.min(14,Math.max(1,Math.round(parseFloat($('#setPredictLead').value)||3)));
+  if(pr!==state.predict || lead!==state.predictLead){ state.predict=pr; state.predictLead=lead; state.predictAt=now(); }
+  const nt=$('#setNotify').checked;
+  const nlead=Math.min(14,Math.max(1,Math.round(parseFloat($('#setNotifyLead').value)||2)));
+  if(nt!==state.notify || nlead!==state.notifyLead){ state.notify=nt; state.notifyLead=nlead; state.notifyAt=now(); }
+  applyNotifySettings();
+  const v=$('#setHousehold').value.trim().toLowerCase().replace(/\s+/g,'-');
+  if(!v){ toast('Enter a household code'); return; }
+  localStorage.setItem('grocery::household',v);
+  commit();
+  if(v!==household){ toast('Reloading…'); setTimeout(()=>location.reload(),500); }
+  else $('#setOverlay').classList.remove('show');
+}
+
+/* ---------- backup: export / restore ---------- */
+function exportBackup(){
+  try{
+    const payload={app:'our-kitchen', version:1, exportedAt:new Date().toISOString(), household, data:normalize(state)};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=`our-kitchen-backup-${iso(new Date())}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('Backup downloaded');
+  }catch(e){ console.error(e); toast('Could not export'); }
+}
+function importBackup(file){
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    let parsed;
+    try{ parsed=JSON.parse(reader.result); }catch(e){ toast('That file isn’t a valid backup'); return; }
+    const raw = (parsed && parsed.data) ? parsed.data : parsed;   // accept wrapped or bare state
+    if(!raw || typeof raw!=='object' || !('shopping' in raw || 'pantry' in raw || 'meals' in raw)){
+      toast('That doesn’t look like an Our Kitchen backup'); return;
+    }
+    if(!confirm('Restore this backup? It replaces your current list, pantry and meals.')) return;
+    state=normalize(raw);
+    renderActive(); refreshStoreSelects(); autofillPickers(); updateBadges();
+    DB.overwrite(state);
+    toast('Backup restored');
+    $('#setOverlay').classList.remove('show');
+  };
+  reader.readAsText(file);
+}
+
+/* ---------- first-run welcome ---------- */
+function showWelcome(){
+  $('#welcomeCode').value=household;
+  $('#welcomeOverlay').classList.add('show');
+  setTimeout(()=>$('#welcomeCode').select(),120);
+}
+function finishWelcome(){
+  const v=$('#welcomeCode').value.trim().toLowerCase().replace(/\s+/g,'-');
+  if(!v){ toast('Enter a household code'); return; }
+  $('#welcomeOverlay').classList.remove('show');
+  if(v!==household){
+    localStorage.setItem('grocery::household',v);
+    toast('Setting up…'); setTimeout(()=>location.reload(),400);
+  }
+}
+
+/* ---------- reminders (#6): use food before it goes off ----------
+   On-device notifications driven by #1 (veg expiry) and #14 (run-out prediction).
+   The page shows them whenever it's open; it also hands the service worker a small
+   schedule so Periodic Background Sync (Chrome/Android) can fire them when closed.
+   A per-day tag means the page and the SW never stack a duplicate. */
+let periodicSyncTried=false;
+// Build the candidate reminders from current pantry state.
+function reminderCandidates(){
+  const out=[];
+  const lead = state.notifyLead>0?state.notifyLead:2;
+  const pLead = state.predictLead>0?state.predictLead:3;
+  live(state.pantry).forEach(p=>{
+    const dl=daysLeft(p);
+    if(dl!=null){
+      const label = dl<0?`${p.name} — past its best`:(dl===0?`${p.name} — use today`:`${p.name} — use within ${dl}d`);
+      out.push({ key:'exp|'+p.name.toLowerCase(), label,
+        fireDate:iso(addDays(new Date(p.expiresAt),-lead)), untilDate:iso(addDays(new Date(p.expiresAt),1)),
+        dueNow: dl<=lead });
+    }
+    if(p.everyday){
+      const pd=predictedDaysLeft(p);
+      if(pd!=null){
+        const runOut=new Date(now()+pd*DAY_MS);
+        out.push({ key:'run|'+p.name.toLowerCase(), label:`${p.name} — running low`,
+          fireDate:iso(addDays(runOut,-pLead)), untilDate:iso(addDays(runOut,2)),
+          dueNow: pd<=pLead });
+      }
+    }
+  });
+  return out;
+}
+// Hand the SW the upcoming schedule so it can fire in the background.
+function postReminderSchedule(cands){
+  if(!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.ready.then(reg=>{
+    const tgt=reg.active||navigator.serviceWorker.controller;
+    if(tgt) tgt.postMessage({type:'reminders:set', schedule:cands.map(({key,label,fireDate,untilDate})=>({key,label,fireDate,untilDate}))});
+  }).catch(()=>{});
+}
+function showReminder(labels){
+  const today=iso(new Date());
+  const title = labels.length===1 ? 'Use it soon' : `${labels.length} things to use soon`;
+  const opts = { body:labels.slice(0,6).join('\n'), tag:'ok-reminder-'+today, icon:'icon-192.png', badge:'icon-192.png', data:{url:'./'} };
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{ try{ new Notification(title,opts); }catch(e){} });
+  } else { try{ new Notification(title,opts); }catch(e){} }
+}
+// Show due reminders now (no-op without permission). Safe to call on load / focus.
+function runReminders(){
+  if(state.notify!==true) return;
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const cands=reminderCandidates();
+  postReminderSchedule(cands);
+  const due=cands.filter(c=>c.dueNow);
+  if(!due.length) return;
+  const today=iso(new Date());
+  const keys=due.map(c=>c.key).sort();
+  let last=null; try{ last=JSON.parse(localStorage.getItem('grocery::lastReminder')); }catch(e){}
+  if(last && last.date===today && keys.every(k=>last.keys.includes(k))) return;  // already alerted today
+  try{ localStorage.setItem('grocery::lastReminder', JSON.stringify({date:today, keys})); }catch(e){}
+  showReminder(due.map(c=>c.label));
+}
+async function registerPeriodicSync(){
+  if(periodicSyncTried) return; periodicSyncTried=true;
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    if(!('periodicSync' in reg)) return;
+    const st=await navigator.permissions.query({name:'periodic-background-sync'}).catch(()=>({state:'denied'}));
+    if(st.state==='granted') await reg.periodicSync.register('reminders',{minInterval:12*60*60*1000});
+  }catch(e){}
+}
+// Called when the user toggles reminders on in Settings — may prompt for permission.
+function applyNotifySettings(){
+  if(state.notify!==true) return;
+  if(!('Notification' in window)){ toast('Notifications aren’t supported on this device'); return; }
+  if(Notification.permission==='granted'){ registerPeriodicSync(); runReminders(); }
+  else if(Notification.permission==='default'){
+    Notification.requestPermission().then(p=>{
+      if(p==='granted'){ registerPeriodicSync(); runReminders(); toast('Reminders on'); }
+      else toast('Reminders need notification permission');
+    });
+  } else { toast('Notifications are blocked — enable them in your browser settings'); }
+}
+
+/* ---------- service worker (offline + clean updates) ---------- */
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load',async()=>{
+    try{
+      const hadController=!!navigator.serviceWorker.controller;
+      await navigator.serviceWorker.register('../service-worker.js');
+      if(hadController){               // only reload on a genuine update, not the first install
+        let refreshing=false;
+        navigator.serviceWorker.addEventListener('controllerchange',()=>{
+          if(refreshing) return; refreshing=true; location.reload();
+        });
+      }
+    }catch(e){ /* offline / file:// — app still works */ }
+  });
+}
+
+/* ---------- boot ---------- */
+(async function(){
+  init();
+  await DB.init();
+  updateSyncStatus();
+  DB.subscribe(data=>{ applyRemote(data); });
+})();
+</script>
+</body>
+</html>

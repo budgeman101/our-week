@@ -1,6 +1,6 @@
-/* Our Week — offline cache.
+/* Our Week — offline cache (also covers the full Our Kitchen app at ./kitchen/).
    Bump CACHE when you change files so phones pick up the update. */
-const CACHE = "our-week-v20";
+const CACHE = "our-week-v21";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,8 +8,15 @@ const ASSETS = [
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png"
+  "./apple-touch-icon.png",
+  "./kitchen/",
+  "./kitchen/index.html",
+  "./kitchen/icon-180.png"
 ];
+// CDN files both apps need offline (Firebase SDK, kitchen's font). Cached
+// first-come; they're version-pinned so cache-first is safe. Firestore API
+// calls are NOT here — sync always goes to the network.
+const CDN_HOSTS = ["www.gstatic.com", "fonts.googleapis.com", "fonts.gstatic.com"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -25,16 +32,30 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
-  // Never cache Firebase / cross-origin API traffic — let it hit the network.
-  if (new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) {
+    // Cache-first for the pinned CDN files; every other cross-origin request
+    // (Firestore sync, the receipt scanner) goes straight to the network.
+    if (CDN_HOSTS.includes(url.hostname)) {
+      e.respondWith(
+        caches.match(req).then(hit => hit || fetch(req).then(res => {
+          if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
+          return res;
+        }))
+      );
+    }
+    return;
+  }
 
-  // Network-first for the app shell so updates show up; fall back to cache offline.
+  // Network-first for the app shell so updates show up; fall back to cache
+  // offline — each half of the app falls back to its own page.
+  const shell = url.pathname.includes("/kitchen/") ? "./kitchen/index.html" : "./index.html";
   e.respondWith(
     fetch(req).then(res => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
       return res;
-    }).catch(() => caches.match(req).then(r => r || caches.match("./index.html")))
+    }).catch(() => caches.match(req).then(r => r || caches.match(shell)))
   );
 });
 
