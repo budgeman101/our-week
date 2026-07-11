@@ -58,7 +58,7 @@ This connects the app to a free Google service called **Firebase**. When one of 
 
 3. Replace each `PASTE_...` value with the matching value from Firebase. Keep the quotes. Save the file.
 
-The header pill will change from **"This device only"** to **"Synced"** once it connects.
+Open the **gear (Settings)** — the pill next to "Settings" changes from **"This device only"** to **"Synced"** once it connects.
 
 ### Part E — Lock the database to just your family (recommended)
 
@@ -144,7 +144,7 @@ Add it to the home screen so it opens full-screen with its own icon:
 
 ## Quick troubleshooting
 
-- **Header says "This device only"** — keys aren't pasted correctly (Part D, now in **`app.js`**), or that phone has no internet. Re-check the config values.
+- **Settings says "This device only"** — keys aren't pasted correctly (Part D, now in **`app.js`**), or that phone has no internet. Re-check the config values.
 - **Phones don't match** — they must use the **same household code** (Part G) and the same Firebase keys (same `app.js`).
 - **Changed the code and the plan looks empty/different** — each code is its own separate plan. Switch back to the shared code in the gear menu.
 - **Updated the app but phones show the old version** — bump `CACHE = "our-week-v4"` to `v5` in `service-worker.js`, re-upload, and reopen.
