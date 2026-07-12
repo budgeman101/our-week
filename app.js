@@ -135,11 +135,14 @@ function paintIdRow(list){
    household, "Notes" for households created via the new welcome setup */
 function noteRowLabel(){ const n=namesDoc(); return (n && n.noteLabel) || "Furniture"; }
 /* ---------------- per-person day rules (behind the scenes) --------- *
- *  rules:<mid> doc = { rowLabel, night, recovery, day, free }.
+ *  rules:<mid> doc = { rowLabel, freeHours, night, recovery, day, free }.
  *  rowLabel renames that person's optional-task row ("Furniture",
- *  "Study", …). The four texts fill the row automatically from their
- *  shifts, so it changes day to day; a note typed on the day itself
- *  always wins. No doc = today's behaviour, nothing auto-fills. */
+ *  "Study", …). The row fills itself from their shifts: freeHours on a
+ *  free day, about half round a short shift, an hour after a long one,
+ *  rest before night shifts and on recovery days — so it changes day to
+ *  day with the real calendar. The four texts are optional wording
+ *  overrides per situation; a note typed on the day itself always wins.
+ *  No doc = nothing auto-fills. */
 function rulesDoc(mid){ const d=items["rules:"+mid]; return (d && !d._gone) ? d : null; }
 function noteRowLabelFor(mid){
   const r=rulesDoc(mid);
@@ -945,17 +948,12 @@ function energyInfo(w, iso){
   const info=items["info:"+w+":energy"];
   return { text: info?info.text:"", derived:false };
 }
-/* energy for one person's day-card. The editable weekday template line
-   belongs to the original second slot (it always described her days);
-   everyone else only gets a line when their shifts derive one. */
-function energyInfoFor(who, w, iso){
-  const d=deriveEnergyFor(who, iso);
-  if(d) return { text:d, derived:true };
-  if(who==="lindsay"){
-    const info=items["info:"+w+":energy"];
-    if(info && (info.text||"")!=="") return { text:info.text, derived:false };
-  }
-  return null;
+/* the heads-up shown on OTHER people's cards — only when their day is
+   genuinely light (works tonight, or recovering after one). A normal
+   or day-shift day says nothing; you know your own day. */
+function energyHeadsUp(mid, iso){
+  const d=deriveEnergyFor(mid, iso);
+  return (d && /— light(est)?$/.test(d)) ? d : null;
 }
 /* which of the four rule situations this person is in that day */
 function shiftSituation(mid, iso){
@@ -965,15 +963,37 @@ function shiftSituation(mid, iso){
   if(today.length) return "day";
   return "free";
 }
+/* how many hours a shift eats — no end time = a full one */
+function shiftHours(s){
+  if(!s.start || !s.end) return 8;
+  const st=toMin(s.start); let en=toMin(s.end);
+  if(en<=st) en+=24*60;                    // crosses midnight
+  return (en-st)/60;
+}
+/* the calculated row text for the day: hours handed out from the
+   person's free-day number, scaled by how big the shift is */
+function autoRowFor(mid, iso){
+  const r=rulesDoc(mid); if(!r) return null;
+  const sit=shiftSituation(mid, iso);
+  const custom=(r[sit]||"").trim();
+  if(custom) return { text:custom, auto:true };           // wording override wins
+  const F=(typeof r.freeHours==="number" && r.freeHours>0) ? r.freeHours : 4;
+  const hrs=n=>"~"+n+" hr"+(n===1?"":"s");
+  if(sit==="recovery") return { text:"Rest — recovery", auto:true };
+  if(sit==="night")    return { text:"Rest before work", auto:true };
+  if(sit==="day"){
+    const L=shiftsFor(iso, mid).reduce((n,s)=>n+shiftHours(s),0);
+    return { text: L<5 ? hrs(Math.max(1, Math.round(F/2))) : hrs(1)+" (evening)", auto:true };
+  }
+  return { text:hrs(F), auto:true };
+}
 /* the optional-task row's value: the day's own note wins, else the
-   person's rule text for today's shift situation, else nothing */
+   person's calculated text, else nothing */
 function rowValueFor(mid, w, iso){
   const id = mid==="lindsay" ? "info:"+w+":furniture" : "info:"+w+":furniture:"+mid;
   const d=items[id];
   if(d && !d._gone && (d.text||"")!=="") return { text:d.text, auto:false };
-  const r=rulesDoc(mid);
-  if(r){ const t=r[shiftSituation(mid, iso)]; if((t||"")!=="") return { text:t, auto:true }; }
-  return null;
+  return autoRowFor(mid, iso);
 }
 function toggleAppt(id, iso){
   const a=items[id]; if(!a) return;
@@ -1265,11 +1285,19 @@ function personSlideHTML(m, allShifts){
   const noteTxt = items[noteId] ? (items[noteId].text||"") : "";
   const furnId = m.id==="lindsay" ? "info:"+selDay+":furniture" : "info:"+selDay+":furniture:"+m.id;
   const rv = rowValueFor(m.id, selDay, iso);
-  const en = energyInfoFor(m.id, selDay, iso);
   const col = MEMBER_COLORS[m.color][0];
-  const energyRow = !en ? "" : (en.derived
-    ? `<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(en.text)}</div></div>`
-    : `<div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(en.text)}</div></div>`);
+  // energy is a heads-up about OTHER people, and only when they're low;
+  // the old hand-written energy line still shows on her card to others
+  let energyRow="";
+  if(m.id!==me){
+    const hu=energyHeadsUp(m.id, iso);
+    if(hu) energyRow=`<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(hu)}</div></div>`;
+    else if(m.id==="lindsay"){
+      const info=items["info:"+selDay+":energy"];
+      if(info && !info._gone && (info.text||"")!=="")
+        energyRow=`<div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(info.text)}</div></div>`;
+    }
+  }
   const care=careItemsFor(selDay, m.id);
   return `<div class="slide" data-mid="${m.id}">
       <div class="ctitle" style="color:${col}"><svg><use href="#i-heart"/></svg>${esc(m.name)}</div>
@@ -1848,7 +1876,16 @@ if(HAS_DOM){
     const r=rulesDoc(mid)||{};
     const lbl=document.getElementById("psLabel");
     lbl.value=r.rowLabel||""; lbl.placeholder=noteRowLabel()+", Study, Notes…";
+    const F=(typeof r.freeHours==="number" && r.freeHours>0) ? r.freeHours : "";
+    const fEl=document.getElementById("psFree");
+    fEl.value=F; fEl.placeholder="4";
     ["night","recovery","day","free"].forEach(k=>{ document.getElementById("psR_"+k).value=r[k]||""; });
+    // the placeholders ARE the calculation — the behind-the-scenes view
+    const Fv=F||4;
+    document.getElementById("psR_night").placeholder="auto: Rest before work";
+    document.getElementById("psR_recovery").placeholder="auto: Rest — recovery";
+    document.getElementById("psR_day").placeholder="auto: ~"+Math.max(1,Math.round(Fv/2))+" hrs short shift · ~1 hr long";
+    document.getElementById("psR_free").placeholder="auto: ~"+Fv+" hrs";
     overlayPerson.classList.add("show");
   }
   document.getElementById("psShifts").addEventListener("click", e=>{
@@ -1860,12 +1897,15 @@ if(HAS_DOM){
   document.getElementById("psSave").onclick=()=>{
     if(!personMid) return;
     const val=id=>document.getElementById(id).value.trim().slice(0,80);
-    put(Object.assign({}, rulesDoc(personMid)||{}, {
+    const doc=Object.assign({}, rulesDoc(personMid)||{}, {
       id:"rules:"+personMid, kind:"rules", mid:personMid,
       rowLabel: cleanName(document.getElementById("psLabel").value),
       night: val("psR_night"), recovery: val("psR_recovery"),
       day: val("psR_day"), free: val("psR_free"),
-    }));
+    });
+    const fh=parseFloat(document.getElementById("psFree").value);
+    if(fh>0) doc.freeHours=fh; else delete doc.freeHours;
+    put(doc);
     overlayPerson.classList.remove("show"); render();
   };
   document.getElementById("psClose").onclick=()=>overlayPerson.classList.remove("show");
@@ -2322,6 +2362,24 @@ if(!HAS_DOM){
       delete items["rules:p3"]; delete items["shift:r1"]; delete items["info:0:furniture:p3"];
       return sit && lbl && night.auto && night.text==="Rest before work" && rec.text==="Recovery day"
           && free.text==="~2 hrs" && pinned.auto===false && pinned.text==="Pinned today";
+    })());
+    console.log("members: hours auto-calc from shift length:", (function(){
+      items["rules:p3"]={id:"rules:p3",kind:"rules",mid:"p3",freeHours:6};
+      const free=rowValueFor("p3", 2, "2026-08-05");                                     // no shift
+      items["shift:c1"]={id:"shift:c1",kind:"shift",who:"p3",date:"2026-08-05",start:"09:00",end:"12:00",repeat:false};
+      const short=rowValueFor("p3", 2, "2026-08-05");                                    // 3 h day shift
+      items["shift:c1"].end="17:30";
+      const long=rowValueFor("p3", 2, "2026-08-05");                                     // 8.5 h day shift
+      items["shift:c1"]={id:"shift:c1",kind:"shift",who:"p3",date:"2026-08-05",start:"17:30",end:"",repeat:false};
+      const night=rowValueFor("p3", 2, "2026-08-05");                                    // night shift
+      const rec=rowValueFor("p3", 3, "2026-08-06");                                      // day after
+      const huN=energyHeadsUp("p3","2026-08-05"); const huR=energyHeadsUp("p3","2026-08-06");
+      items["shift:c1"]={id:"shift:c1",kind:"shift",who:"p3",date:"2026-08-05",start:"09:00",end:"15:00",repeat:false};
+      const huDay=energyHeadsUp("p3","2026-08-05");                                      // moderate → no flag
+      delete items["rules:p3"]; delete items["shift:c1"];
+      return free.text==="~6 hrs" && short.text==="~3 hrs" && long.text==="~1 hr (evening)"
+          && night.text==="Rest before work" && rec.text==="Rest — recovery"
+          && /works tonight/i.test(huN||"") && /night shift/i.test(huR||"") && huDay===null;
     })());
     console.log("members: care chips follow their person:", (function(){
       items["care:t1"]={id:"care:t1",kind:"tpl",sec:"care",scope:0,text:"Old chip",icon:"i-paw",order:0};             // pre-members: no mid
