@@ -467,10 +467,10 @@
     <p style="margin-top:18px">Their card's note row is called:</p>
     <input type="text" id="psLabel" autocomplete="off" />
     <div class="psrule" style="margin-top:18px"><label>Hours they can give it on a totally free day</label><input type="number" id="psFree" min="0" step="0.5" inputmode="decimal" /></div>
-    <p style="margin-top:18px">The app fills the row from their shifts — full hours on a free day, about half round a short shift, an hour after a long one, rest before nights and on recovery days. Want different wording for a situation? Type it (blank = automatic). A note typed on the day itself always wins:</p>
+    <p style="margin-top:18px">The app fills the row from their shifts — full hours on a free day, about half round a short shift, an hour after a full day, rest after a long one (9+ hrs, however odd the hours), rest before nights and on recovery days. Want different wording for a situation? Type it (blank = automatic). A note typed on the day itself always wins:</p>
     <div class="psrule"><label>Works tonight <span class="psen">shows as low energy</span></label><input type="text" id="psR_night" autocomplete="off" /></div>
     <div class="psrule"><label>Day after a night shift <span class="psen">shows as lowest energy</span></label><input type="text" id="psR_recovery" autocomplete="off" /></div>
-    <div class="psrule"><label>Day shift <span class="psen">normal energy — no flag</span></label><input type="text" id="psR_day" autocomplete="off" /></div>
+    <div class="psrule"><label>Day shift <span class="psen">9+ hrs shows as low energy</span></label><input type="text" id="psR_day" autocomplete="off" /></div>
     <div class="psrule"><label>No shift <span class="psen">normal energy — no flag</span></label><input type="text" id="psR_free" autocomplete="off" /></div>
     <button class="btn" id="psSave">Save</button>
     <button class="btn sec" id="psClose">Close</button>

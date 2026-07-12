@@ -904,7 +904,9 @@ function isNightShift(s){
   if(!s || !s.start) return false;
   const st=toMin(s.start);
   if(st>=14*60) return true;                                  // starts 2 pm or later
-  if(s.end){ const en=toMin(s.end); if(en<=st || en>=22*60) return true; } // crosses midnight / ends late
+  // crosses midnight / ends 11 pm or later. (Not 10 pm: a day-start shift
+  // running to 10 pm is a LONG day, not a night — no recovery day after.)
+  if(s.end){ const en=toMin(s.end); if(en<=st || en>=23*60) return true; }
   return false;
 }
 function prevISO(iso){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()-1); return isoOf(d); }
@@ -917,12 +919,12 @@ function deriveEnergyFor(who, iso){
   if(workedLastNight) bits.push("Off a night shift");
   today.forEach(s=>{
     const t=s.start ? " ("+fmtTime(s.start)+(s.end?"–"+fmtTime(s.end):"")+")" : "";
-    bits.push((isNightShift(s)?"works tonight":"day shift")+t);
+    bits.push((isNightShift(s)?"works tonight":isLongShift(s)?"long shift":"day shift")+t);
   });
   let sentence=bits.join(" + "); sentence=sentence.charAt(0).toUpperCase()+sentence.slice(1);
   let level="moderate";
   if(workedLastNight && today.length) level="lightest";
-  else if(workedLastNight || today.some(isNightShift)) level="light";
+  else if(workedLastNight || today.some(s=>isNightShift(s)||isLongShift(s))) level="light";
   return sentence+" — "+level;
 }
 /* the household's energy line (print + tests): all shifts together */
@@ -934,12 +936,12 @@ function deriveEnergy(iso){
   if(workedLastNight) bits.push("Off a night shift");
   today.forEach(s=>{
     const t=s.start ? " ("+fmtTime(s.start)+(s.end?"–"+fmtTime(s.end):"")+")" : "";
-    bits.push((isNightShift(s)?"works tonight":"day shift")+t);
+    bits.push((isNightShift(s)?"works tonight":isLongShift(s)?"long shift":"day shift")+t);
   });
   let sentence=bits.join(" + "); sentence=sentence.charAt(0).toUpperCase()+sentence.slice(1);
   let level="moderate";
   if(workedLastNight && today.length) level="lightest";
-  else if(workedLastNight || today.some(isNightShift)) level="light";
+  else if(workedLastNight || today.some(s=>isNightShift(s)||isLongShift(s))) level="light";
   return sentence+" — "+level;
 }
 function energyInfo(w, iso){
@@ -970,6 +972,12 @@ function shiftHours(s){
   if(en<=st) en+=24*60;                    // crosses midnight
   return (en-st)/60;
 }
+/* a LONG day shift (9+ hrs — think delivery routes) drains like a night
+   shift drains: the day reads light and the row says rest, even though
+   the hours are daytime. Nights stay the only thing that earns a
+   recovery day after (that's a sleep-cycle thing). */
+const LONG_SHIFT_H = 9;
+function isLongShift(s){ return !isNightShift(s) && shiftHours(s)>=LONG_SHIFT_H; }
 /* the calculated row text for the day: hours handed out from the
    person's free-day number, scaled by how big the shift is */
 function autoRowFor(mid, iso){
@@ -983,6 +991,7 @@ function autoRowFor(mid, iso){
   if(sit==="night")    return { text:"Rest before work", auto:true };
   if(sit==="day"){
     const L=shiftsFor(iso, mid).reduce((n,s)=>n+shiftHours(s),0);
+    if(L>=LONG_SHIFT_H) return { text:"Rest — long day", auto:true };
     return { text: L<5 ? hrs(Math.max(1, Math.round(F/2))) : hrs(1)+" (evening)", auto:true };
   }
   return { text:hrs(F), auto:true };
@@ -1884,7 +1893,7 @@ if(HAS_DOM){
     const Fv=F||4;
     document.getElementById("psR_night").placeholder="auto: Rest before work";
     document.getElementById("psR_recovery").placeholder="auto: Rest — recovery";
-    document.getElementById("psR_day").placeholder="auto: ~"+Math.max(1,Math.round(Fv/2))+" hrs short shift · ~1 hr long";
+    document.getElementById("psR_day").placeholder="auto: ~"+Math.max(1,Math.round(Fv/2))+" hrs short · ~1 hr full · rest 9+";
     document.getElementById("psR_free").placeholder="auto: ~"+Fv+" hrs";
     overlayPerson.classList.add("show");
   }
@@ -2380,6 +2389,19 @@ if(!HAS_DOM){
       return free.text==="~6 hrs" && short.text==="~3 hrs" && long.text==="~1 hr (evening)"
           && night.text==="Rest before work" && rec.text==="Rest — recovery"
           && /works tonight/i.test(huN||"") && /night shift/i.test(huR||"") && huDay===null;
+    })());
+    console.log("members: a LONG day shift (delivery-style) reads light + rest:", (function(){
+      items["shift:d1"]={id:"shift:d1",kind:"shift",who:"p3",date:"2026-08-05",start:"10:40",end:"21:10",repeat:false};   // 10.5 h route
+      items["rules:p3"]={id:"rules:p3",kind:"rules",mid:"p3",freeHours:4};
+      const en=deriveEnergyFor("p3","2026-08-05");
+      const hu=energyHeadsUp("p3","2026-08-05");
+      const row=rowValueFor("p3", 2, "2026-08-05");
+      const noRecovery = shiftSituation("p3","2026-08-06")==="free" && dayBlockedFor("p3","2026-08-06")===false;
+      items["shift:d1"].end="22:30";                       // finishing 10:30 pm is a long DAY, not a night
+      const lateEnd = !isNightShift(items["shift:d1"]) && dayBlockedFor("p3","2026-08-06")===false;
+      delete items["shift:d1"]; delete items["rules:p3"];
+      return /long shift/i.test(en) && /— light$/.test(en) && !!hu
+          && row.text==="Rest — long day" && noRecovery && lateEnd;
     })());
     console.log("members: care chips follow their person:", (function(){
       items["care:t1"]={id:"care:t1",kind:"tpl",sec:"care",scope:0,text:"Old chip",icon:"i-paw",order:0};             // pre-members: no mid
