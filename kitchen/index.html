@@ -1574,16 +1574,58 @@ function addShop(name,cat,store,unit){
 }
 
 /* ---------- Siri / Shortcuts inbox ---------- */
-// Add an item that arrived from an Apple Shortcut. Applies the same
-// remembered store / aisle / unit the manual add bar uses, and merges
-// duplicates so saying the same thing twice just bumps the quantity.
+// A spoken aisle word → category id (ids, words from names, common aliases).
+const SPOKEN_AISLE_ALIASES={veggies:'produce',vegetables:'produce',fruit:'produce',
+  freezer:'frozen',freezers:'frozen',drinks:'beverages',cleaning:'household',cleaners:'household'};
+function catFromWord(w){
+  w=String(w||'').toLowerCase();
+  if(SPOKEN_AISLE_ALIASES[w]) return SPOKEN_AISLE_ALIASES[w];
+  const hit=CATEGORIES.find(c=>c.id===w || c.name.toLowerCase().split(/[^a-z]+/).includes(w));
+  return hit?hit.id:null;
+}
+// "potatoes in costco produce" → {name:'potatoes', store:'Costco', cat:'produce'}.
+// Only strips the tail when EVERY word after in/at/from resolves to a known
+// store or aisle — anything unrecognized leaves the name untouched, so item
+// names that merely contain "in" survive intact.
+function parseSpokenPlace(raw){
+  const stop=/^(the|a|an|and|aisle|section|shelf)$/i;
+  const seps=/\s+(?:in|at|from)\s+/gi;
+  const cuts=[]; let m;
+  while((m=seps.exec(raw))) cuts.push({i:m.index, j:seps.lastIndex});
+  for(let c=cuts.length-1;c>=0;c--){
+    const name=raw.slice(0,cuts[c].i).trim();
+    const words=raw.slice(cuts[c].j).split(/\s+/).filter(w=>w && !stop.test(w));
+    if(!name || !words.length) continue;
+    let store=null, cat=null, ok=true;
+    for(const w of words){
+      const s=(state.stores||[]).find(x=>x.toLowerCase().split(/\s+/).includes(w.toLowerCase()));
+      const cid=catFromWord(w);
+      if(s && !store) store=s;
+      else if(cid && (!cat || cid===cat)) cat=cid;
+      else { ok=false; break; }
+    }
+    if(ok && (store||cat)) return {name, store, cat};
+  }
+  return null;
+}
+// Add an item that arrived from an Apple Shortcut. A spoken place ("…in
+// costco produce") wins and is remembered for next time; otherwise the
+// item's memory; otherwise the same aisle dictionary the add bar uses.
+// Merges duplicates so saying the same thing twice just bumps the quantity.
 function addFromInbox(name, qty){
   name=String(name||'').trim(); if(!name) return;
   qty=round3(Math.max(1, Number(qty)||1));
+  const p=parseSpokenPlace(name);
+  const spokenStore=p?p.store:null, spokenCat=p?p.cat:null;
+  if(p) name=p.name;
   const d=(state.itemDefaults||{})[name.toLowerCase()];
-  const store=d?(d.store||''):'';
-  const cat  =d?(d.cat||'other'):'other';
+  const store=spokenStore || (d?(d.store||''):'');
+  const cat  =spokenCat || (d?(d.cat||'other'):(guessCat(name)||'other'));
   const unit =d?(d.unit||'each'):'each';
+  if(spokenStore||spokenCat){
+    state.itemDefaults=state.itemDefaults||{};
+    state.itemDefaults[name.toLowerCase()]={name, store:store||'', cat, unit, updatedAt:now()};
+  }
   const existing=state.shopping.find(i=>!i.deleted && !i.checked && i.name.toLowerCase()===name.toLowerCase() && (i.store||'')===store && (i.unit||'each')===unit);
   if(existing){ existing.qty=round3((existing.qty||0)+qty); touch(existing); }
   else{ state.shopping.push({id:uid(),name,qty,cat,store,unit,checked:false,updatedAt:now()}); }
