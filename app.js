@@ -422,12 +422,21 @@ function urlB64ToUint8(b64){
   return out;
 }
 // off | on | denied | needs-sync | needs-keys | unsupported
-function reminderState(){
+// "on" means this phone actually HOLDS a push subscription. Permission
+// alone isn't enough: code can never un-grant it, so after Turn off the
+// permission stays "granted" while the subscription is gone — judging by
+// permission made the status stick at ON and the button look broken.
+async function reminderState(){
   if(!pushSupported()) return "unsupported";
   if(!CONFIGURED) return "needs-sync";     // no Firebase = nowhere to store the sub / no sender
   if(!PUSH_KEYED) return "needs-keys";     // VAPID key not pasted yet
   if(Notification.permission==="denied") return "denied";
-  return Notification.permission==="granted" ? "on" : "off";
+  if(Notification.permission!=="granted") return "off";
+  try{
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && await reg.pushManager.getSubscription();
+    return sub ? "on" : "off";
+  }catch(e){ return "off"; }
 }
 async function enableReminders(){
   try{
@@ -447,8 +456,8 @@ async function enableReminders(){
 }
 async function disableReminders(){
   try{
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && await reg.pushManager.getSubscription();
     if(sub){
       const id = "sub_"+Math.abs(hashStr(sub.endpoint)).toString(36);
       if(db && household) db.collection("households").doc(household).collection("push").doc(id).delete().catch(()=>{});
@@ -1833,10 +1842,10 @@ if(HAS_DOM){
     paintReminders();
     overlaySettings.classList.add("show");
   }
-  function paintReminders(){
+  async function paintReminders(){
     const st=document.getElementById("remindStatus"), btn=document.getElementById("remindBtn");
     const dot='<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg>';
-    const s=reminderState();
+    const s=await reminderState();
     const map={
       on:           [dot+" Reminders are ON for this phone", "synced", "Turn off"],
       off:          [dot+" Reminders are off on this phone", "local", "Turn on reminders"],
@@ -1855,12 +1864,12 @@ if(HAS_DOM){
     if(s==="on"){ await disableReminders(); }
     else if(s==="denied"){ alert("Notifications are blocked for the app. On iPhone: Settings → Notifications → Our Week → allow. (Or delete the Home Screen app and re-add it, then turn reminders on again.)"); }
     else { const r=await enableReminders(); if(r==="error") alert("Couldn't turn on reminders — check REMINDERS-SETUP.md is finished."); }
-    paintReminders();
+    await paintReminders();
   };
   document.getElementById("gear").onclick=openSettings;
   document.getElementById("printBtn").onclick=doPrint;
   document.getElementById("setClose").onclick=()=>overlaySettings.classList.remove("show");
-  document.getElementById("setSave").onclick=()=>{
+  document.getElementById("setSave").onclick=async ()=>{
     // Save the people list — renames, colours, added or removed people.
     syncDraftNames();
     const list=setPeopleDraft.filter(m=>m.id || m.name);   // an empty brand-new row just goes away
@@ -1896,10 +1905,10 @@ if(HAS_DOM){
     if(prev && Object.keys(prev).length &&
        confirm("Bring your plan's data over to this new code? (OK = everything moves with you. Do this on each phone — it's safe to repeat.)")){
       Object.values(prev).forEach(d=>put(d));
-      if(reminderState()==="on") enableReminders();   // re-point this phone's reminders
+      if((await reminderState())==="on") enableReminders();   // re-point this phone's reminders
       showToast("Moved your plan to the new code");
       render();
-    } else if(prev && reminderState()==="on"){
+    } else if(prev && (await reminderState())==="on"){
       enableReminders();   // even without moving data, reminders follow the code
     }
   };
