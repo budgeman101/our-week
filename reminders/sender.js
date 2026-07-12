@@ -51,11 +51,29 @@ function weekdayMon0(iso) { return (new Date(iso + "T00:00:00Z").getUTCDay() + 6
 function mondayISO(iso) { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - weekdayMon0(iso)); return d.toISOString().slice(0, 10); }
 
 /* ---------------- pure logic: what's due right now ----------------- */
+// Each household names its own people (meta:members, or the older
+// meta:names pair). Falls back to the original defaults so reminders
+// never say the wrong family's names.
+function memberNames(items) {
+  const map = {};
+  let count = 0;
+  const md = items.find((t) => (t._id || t.id) === "meta:members");
+  if (md && Array.isArray(md.list)) {
+    md.list.forEach((m) => { if (m && m.id && m.name) { map[m.id] = String(m.name); count++; } });
+  }
+  if (!count) {
+    const n = items.find((t) => (t._id || t.id) === "meta:names") || {};
+    map.ben = n.ben || "Ben"; map.lindsay = n.lindsay || "Lindsay"; count = 2;
+  }
+  map.both = count > 2 ? "Everyone" : "Both";
+  return map;
+}
 // items: array of plain objects (kind, ...). now: epoch ms.
 // returns every reminder whose fire-time is in the window [now-maxAge, now];
 // the caller filters out ones already sent. Pure — no network, no clock reads.
 function dueReminders(now, items, cfg) {
   const tz = cfg.tz;
+  const names = memberNames(items);
   const out = [];
   const within = (fireMs) => fireMs <= now && (now - fireMs) < cfg.maxAgeMin * 60000;
   const has = (id) => items.some((t) => t._id === id || t.id === id);
@@ -80,7 +98,10 @@ function dueReminders(now, items, cfg) {
         const key = "shift:" + (t._id || t.id) + ":" + D;
         if (within(fireMs)) {
           const label = t.label ? " (" + t.label + ")" : "";
-          out.push({ key, title: "Lindsay's shift" + label, body: "Starts at " + fmt12(t.start) + " — heads up." });
+          // shifts saved before people-lists carried no owner — they were
+          // always the original household's second slot ("lindsay")
+          const owner = names[t.who || "lindsay"];
+          out.push({ key, title: (owner ? owner + "'s shift" : "Work shift") + label, body: "Starts at " + fmt12(t.start) + " — heads up." });
         }
       }
     }
@@ -90,7 +111,7 @@ function dueReminders(now, items, cfg) {
         const occurs = t.repeat ? weekdayMon0(D) === weekdayMon0(t.date) : t.date === D;
         if (!occurs) continue;
         if (t.repeat ? has(adoneKey(t._id || t.id, D)) : t.done) continue;   // already ticked off
-        const who = t.who === "ben" ? "Ben" : t.who === "lindsay" ? "Lindsay" : "Both";
+        const who = names[t.who] || names.both;
         const timeStr = t.time ? " at " + fmt12(t.time) : "";
         if (t.remind === "morning") {
           const fireMs = wallToMs(+D.slice(0, 4), +D.slice(5, 7), +D.slice(8, 10), cfg.apptMorningHour, 0, tz);
@@ -200,4 +221,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { dueReminders, wallToMs, localDateStr, weekdayMon0, mondayISO, fmt12 };
+module.exports = { dueReminders, memberNames, wallToMs, localDateStr, weekdayMon0, mondayISO, fmt12 };

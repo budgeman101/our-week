@@ -1,5 +1,5 @@
 /* ================================================================== *
- *  Our Week — shared plan, projects & handoff notes for Ben & Lindsay.
+ *  Our Week — a household's shared plan, projects & handoff notes.
  *  Three views: Week (daily plan), Projects, Notes (shared board).
  *  Everything on the day view is editable, addable, and syncs.
  * ================================================================== */
@@ -23,7 +23,10 @@ const firebaseConfig = {
   messagingSenderId: "579975197541",
   appId: "1:579975197541:web:27e82873afb327da48a78c"
 };
-const CONFIGURED = !String(firebaseConfig.apiKey).startsWith("PASTE_");
+// Opening the app with ?local=1 keeps everything on this device — handy
+// for trying things out without touching the live shared plan.
+const FORCE_LOCAL = HAS_DOM && /[?&]local=1/.test(location.search);
+const CONFIGURED = !String(firebaseConfig.apiKey).startsWith("PASTE_") && !FORCE_LOCAL;
 
 /* ------------------------------------------------------------------ *
  *  PUSH REMINDERS — paste your VAPID PUBLIC key here (safe to publish).
@@ -34,42 +37,110 @@ const VAPID_PUBLIC_KEY = "BO4M0rjTcevPmcBdN76KMv0Z28_oMZ0zByxUh2OsH0pJuOKGnO5sIE
 const PUSH_KEYED = /^[A-Za-z0-9_-]{80,}$/.test(VAPID_PUBLIC_KEY);
 
 /* ============================ constants =========================== */
-const WHO = { ben:"Ben", lindsay:"Lindsay", both:"Both" };
-const WHO_ORDER = ["ben","lindsay","both"];
+const WHO = { ben:"Ben", lindsay:"Lindsay", both:"Both" };   // display names by id — rebuilt by applyNames()
+const WHO_ORDER = ["ben","lindsay","both"];                  // member ids + "both" last — rebuilt by applyNames()
 const DAY_FULL  = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const DAY_SHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const CARE_ICONS = ["i-paw","i-child","i-leaf","i-heart","i-list"];
 
-/* ---------------- household display names (friend-ready) ---------- *
- *  Internal ids stay "ben"/"lindsay" everywhere (so nothing migrates);
- *  a per-household meta:names doc maps them to what's shown on screen.
- *  No doc = the original defaults, so the original household is
- *  pixel-identical. Names are cleaned of <, > and & at save AND read,
- *  which keeps every `${WHO[...]}` template injection safe. */
+/* -------------------- household people (members) ------------------ *
+ *  Every household keeps its own list of people in one meta:members
+ *  doc: { list:[{id, name, color}, …] }. No doc = the two original
+ *  slots (ids "ben"/"lindsay", names from meta:names when present), so
+ *  every existing household — including the original one — keeps
+ *  working without touching a single task. Internal ids never change
+ *  and are never shown; renames only touch the display name. "both"
+ *  stays the stored value for a shared task: it reads "Both" for a
+ *  couple and "Everyone" for a bigger household.
+ *  Names are cleaned of <, > and & at save AND read, which keeps every
+ *  `${WHO[...]}` template injection safe. */
+const MEMBER_COLORS = [
+  ["#2563eb","#dbeafe"],   // blue — the original first slot
+  ["#db2777","#fce7f3"],   // pink — the original second slot
+  ["#059669","#d1fae5"],   // green
+  ["#d97706","#fef3c7"],   // amber
+  ["#7c3aed","#ede9fe"],   // violet
+  ["#0891b2","#cffafe"],   // teal
+];
+const MAX_MEMBERS = 6;
 const WHO_DEFAULT = { ben:"Ben", lindsay:"Lindsay" };
 function cleanName(s){ return String(s||"").replace(/[<>&]/g,"").trim().slice(0,20); }
 function namesDoc(){ return items["meta:names"]; }
-function applyNames(){
+function membersDoc(){ return items["meta:members"]; }
+/* stable id for the person typed into welcome slot i — the first two
+   map onto the original slots so nothing about existing data migrates */
+function memberIdFor(i){ return i===0 ? "ben" : i===1 ? "lindsay" : "p"+(i+1); }
+/* the sanitized people list — always at least the two original slots */
+function members(){
+  const md = membersDoc();
+  if(md && Array.isArray(md.list)){
+    const seen = {}, out = [];
+    md.list.forEach(m=>{
+      if(!m) return;
+      const id = String(m.id||"").toLowerCase();
+      if(!/^[a-z][a-z0-9]*$/.test(id) || id==="both" || seen[id]) return;
+      seen[id] = 1;
+      out.push({ id, name: cleanName(m.name) || "Person "+(out.length+1),
+                 color: (typeof m.color==="number" && MEMBER_COLORS[m.color]) ? m.color : out.length % MEMBER_COLORS.length });
+    });
+    if(out.length>=2) return out.slice(0, MAX_MEMBERS);
+  }
   const n = namesDoc()||{};
   const preSetup = !household && !me;   // welcome backdrop: show no real names
-  WHO.ben = cleanName(n.ben) || (preSetup ? "Person 1" : WHO_DEFAULT.ben);
-  WHO.lindsay = cleanName(n.lindsay) || (preSetup ? "Person 2" : WHO_DEFAULT.lindsay);
+  return [
+    { id:"ben",     name: cleanName(n.ben)     || (preSetup ? "Person 1" : WHO_DEFAULT.ben),     color:0 },
+    { id:"lindsay", name: cleanName(n.lindsay) || (preSetup ? "Person 2" : WHO_DEFAULT.lindsay), color:1 },
+  ];
+}
+function memberColor(id){ const m=members().find(x=>x.id===id); return MEMBER_COLORS[m ? m.color : 0]; }
+/* safe display for any stored who value — a removed person's tasks read as shared */
+function normWho(w){ return WHO[w] ? w : "both"; }
+function whoLabel(w){ return WHO[normWho(w)]; }
+function applyNames(){
+  const list = members();
+  Object.keys(WHO).forEach(k=>{ delete WHO[k]; });
+  WHO_ORDER.length = 0;
+  list.forEach(m=>{ WHO[m.id]=m.name; WHO_ORDER.push(m.id); });
+  WHO.both = list.length>2 ? "Everyone" : "Both";
+  WHO_ORDER.push("both");
   if(HAS_DOM){
-    const set=(sel,txt)=>document.querySelectorAll(sel).forEach(el=>{ el.textContent=txt; });
-    set("#legendBen", WHO.ben); set("#legendLindsay", WHO.lindsay);
-    set('#setIdRow [data-id="ben"]', WHO.ben); set('#setIdRow [data-id="lindsay"]', WHO.lindsay);
+    paintMemberStyles(list);
+    paintLegend(list);
+    paintIdRow(list);
+    const nc=document.getElementById("noteText");
+    if(nc) nc.placeholder = list.length>2 ? "Leave a note for the others…" : "Leave a note for the other…";
   }
+}
+/* per-person colors become CSS rules so every tag/checkbox just works */
+function paintMemberStyles(list){
+  let st=document.getElementById("memberStyles");
+  if(!st){ st=document.createElement("style"); st.id="memberStyles"; document.head.appendChild(st); }
+  st.textContent = list.map(m=>{
+    const c=MEMBER_COLORS[m.color][0], bg=MEMBER_COLORS[m.color][1];
+    return ".who."+m.id+"{background:"+bg+";color:"+c+"}"+
+           ".item."+m.id+" .box{border-color:"+c+"}"+
+           ".cuwho."+m.id+"{background:"+bg+";color:"+c+"}";
+  }).join("\n");
+}
+function paintLegend(list){
+  const lg=document.getElementById("legend"); if(!lg) return;
+  lg.innerHTML = list.map(m=>'<span class="lg"><span class="sw" style="background:'+MEMBER_COLORS[m.color][0]+'"></span>'+esc(m.name)+'</span>').join("")
+    + '<span class="lg"><span class="sw" style="background:var(--both)"></span>'+esc(WHO.both)+' (bold)</span>';
+}
+function paintIdRow(list){
+  const row=document.getElementById("setIdRow"); if(!row) return;
+  row.innerHTML = list.map(m=>'<button data-id="'+m.id+'" class="'+(me===m.id?"on":"")+'">'+esc(m.name)+'</button>').join("");
 }
 /* the partner card's free note row: "Furniture" for the original
    household, "Notes" for households created via the new welcome setup */
 function noteRowLabel(){ const n=namesDoc(); return (n && n.noteLabel) || "Furniture"; }
 function escRe(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
 /* an explicit name in the text beats keyword guessing — keywords are
-   this household's habits, a name is a direct instruction */
+   a household's habits, a name is a direct instruction */
 function whoFromName(s){
-  for(const w of ["ben","lindsay"]){
-    const nm=String(WHO[w]||"").trim().toLowerCase();
-    if(nm && new RegExp("\\b"+escRe(nm)+"\\b").test(s)) return w;
+  for(const m of members()){
+    const nm=m.name.trim().toLowerCase();
+    if(nm && new RegExp("\\b"+escRe(nm)+"\\b").test(s)) return m.id;
   }
   return null;
 }
@@ -114,13 +185,20 @@ const AREA_WHO_DEFAULT = { shop:"both", house:"both", cleaning:"lindsay", kitche
   laundry:"lindsay", yard:"ben", garage:"ben", paint:"ben", selling:"lindsay", organizing:"lindsay",
   plants:"lindsay", pets:"ben", errands:"ben", personal:"lindsay", other:"both" };
 
+/* The who-keywords above are the ORIGINAL household's real-life split —
+   personal habits, not truths. Households created through the welcome
+   card (marked by noteLabel:"Notes" on their names doc) skip them: a
+   typed name still wins, "together" words still mean everyone, and
+   anything else lands on Everyone to be tapped into place. */
+function tunedHousehold(){ const n=namesDoc(); return !(n && n.noteLabel==="Notes"); }
+
 function classify(text){
   const s=String(text).toLowerCase();
   let area="other";
   for(const r of AREA_RULES){ if(r[1].test(s)){ area=r[0]; break; } }
   let who = WHO_RULES[0][1].test(s) ? "both" : whoFromName(s);
-  if(!who) for(const r of WHO_RULES){ if(r[1].test(s)){ who=r[0]; break; } }
-  return { area, who: who || AREA_WHO_DEFAULT[area] || "both" };
+  if(!who && tunedHousehold()) for(const r of WHO_RULES){ if(r[1].test(s)){ who=r[0]; break; } }
+  return { area, who: who || (tunedHousehold() ? (AREA_WHO_DEFAULT[area]||"both") : "both") };
 }
 // who for a project step: only override the project's person when the step
 // wording strongly points at someone, else inherit the project.
@@ -129,7 +207,7 @@ function classifyWho(text, fallback){
   if(WHO_RULES[0][1].test(s)) return "both";
   const byName=whoFromName(s);
   if(byName) return byName;
-  for(const r of WHO_RULES){ if(r[1].test(s)) return r[0]; }
+  if(tunedHousehold()) for(const r of WHO_RULES){ if(r[1].test(s)) return r[0]; }
   return fallback || "both";
 }
 
@@ -228,11 +306,11 @@ let view = "week";
 let projSort = localStorage.getItem("ow-projsort") || "smart";
 let currentMonday = mondayOf(new Date());
 let selDay = todayMonIndex();
-let pendWho = "ben";
-let welcomeId = "";
+let welcomeId = "";                    // welcome card: index of the tapped "this phone is" name
+let rolodexMid = null;                 // which person's day-card is in view (sticks across re-renders)
 let db = null, colRef = null, unsub = null, inboxUnsub = null, fbStarted = false;
 let undoTimer = null, lastDeleted = null;
-let editingId = null, edWho = "ben", edWhoStart = "ben", edIcon = "i-paw", splitMode = false, editingFresh = false;
+let editingId = null, edWho = "both", edWhoStart = "both", edIcon = "i-paw", splitMode = false, editingFresh = false;
 
 /* ============================= date utils ========================= */
 function mondayOf(d){
@@ -454,25 +532,33 @@ const NEUTRAL_ROUTINE = {
 };
 function pendingSetup(){ try{ return JSON.parse(localStorage.getItem("ow-pending-setup")||"null"); }catch(e){ return null; } }
 function clearPendingSetup(){ localStorage.removeItem("ow-pending-setup"); }
-/* phones can type the two names in either order — identity follows the
-   NAME the person tapped, not the slot it was typed into */
+/* the names typed on the welcome card, oldest-format-first so a phone
+   that saved a pre-members setup still gets through */
+function pendingPeople(p){
+  if(Array.isArray(p.people)) return p.people.map(cleanName).filter(Boolean).slice(0, MAX_MEMBERS);
+  return [cleanName(p.ben), cleanName(p.lindsay)].filter(Boolean);
+}
+/* phones can type the names in any order — identity follows the NAME
+   the person tapped, not the slot it was typed into */
 function adoptIdentity(p){
-  const n=namesDoc(); if(!n || !p || !p.picked) return;
+  if(!p || !p.picked || (!namesDoc() && !membersDoc())) return;
   const pick=String(p.picked).trim().toLowerCase();
-  const id = cleanName(n.ben).toLowerCase()===pick ? "ben"
-           : cleanName(n.lindsay).toLowerCase()===pick ? "lindsay" : null;
-  if(id && me!==id){ me=id; pendWho=me; localStorage.setItem("ow-me", me); }
+  const m=members().find(x=>x.name.trim().toLowerCase()===pick);
+  if(m && me!==m.id){ me=m.id; localStorage.setItem("ow-me", me); }
 }
 function seedNeutralIfNeeded(){
   const p=pendingSetup(); if(!p) return;
   const settled = colRef || !CONFIGURED;   // writes reach the cloud (or there is no cloud)
-  if(namesDoc()){ adoptIdentity(p); if(settled) clearPendingSetup(); return; }
+  if(namesDoc() || membersDoc()){ adoptIdentity(p); if(settled) clearPendingSetup(); return; }
   if(Object.values(items).some(t=>t && t.kind && t.kind!=="meta")){
     if(settled) clearPendingSetup();       // existing household — never write over it
     return;
   }
-  put({ id:"meta:names", kind:"names", ben:cleanName(p.ben)||"Person 1",
-        lindsay:cleanName(p.lindsay)||"Person 2", noteLabel:"Notes" });
+  const names=pendingPeople(p);
+  while(names.length<2) names.push("Person "+(names.length+1));
+  put({ id:"meta:names", kind:"names", ben:names[0], lindsay:names[1], noteLabel:"Notes" });
+  put({ id:"meta:members", kind:"members",
+        list: names.map((nm,i)=>({ id:memberIdFor(i), name:nm, color:i%MEMBER_COLORS.length })) });
   NEUTRAL_CLEAN.forEach((text,w)=> seedDoc("clean:"+w,
     {kind:"tpl", sec:"clean", scope:w, check:true, who:"both", text, order:0}));
   ["morning","night","each"].forEach(sec=> NEUTRAL_ROUTINE[sec].forEach((r,i)=> seedDoc("tpl:"+sec+":"+r.id,
@@ -486,7 +572,7 @@ function seedNeutralIfNeeded(){
    neutral, everything else keeps the original behaviour (sentinels make
    re-runs no-ops either way) */
 function runSeeders(){
-  if(pendingSetup() || namesDoc()) seedNeutralIfNeeded();
+  if(pendingSetup() || namesDoc() || membersDoc()) seedNeutralIfNeeded();
   else { seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); }
   autoRoll(); migrateRemoveJohny();
 }
@@ -566,11 +652,12 @@ function toggleTodo(id){
   } else { t.done=!t.done; t.doneBy=t.done?(me||null):null; put(t); }
 }
 function toggleStep(id){ const t=items[id]; if(!t) return; t.done=!t.done; t.doneBy=t.done?(me||null):null; put(t); }
-function cycleWho(id){ const t=items[id]; if(!t) return; t.who=WHO_ORDER[(WHO_ORDER.indexOf(t.who)+1)%WHO_ORDER.length]; put(t); render(); }
 function addTodo(text){
   text=(text||"").trim(); if(!text) return;
   const id="c:"+Date.now()+Math.random().toString(36).slice(2,6);
-  put({ id, kind:"todo", text, who:pendWho, area:classify(text).area,
+  // day quick-adds land on Everyone unless a name is typed;
+  // who is changed in the edit screen (tap the row)
+  put({ id, kind:"todo", text, who: whoFromName(text.toLowerCase()) || "both", area:classify(text).area,
         weekKey:curWeekKey(), day:selDay, done:false, order:Date.now() });
   render();
 }
@@ -638,32 +725,24 @@ function addStep(pid){
   put({ id, kind:"pstep", projectId:pid, text:"", done:false, schedISO:null, who, order });
   openEditor(id, true);
 }
-function cycleProjWho(id){ cycleWho(id); }
-function cycleStepWho(id){
-  const t=items[id]; if(!t) return;
-  t.whoManual=true;
-  t.who=WHO_ORDER[(WHO_ORDER.indexOf(t.who||"both")+1)%WHO_ORDER.length];
-  put(t); render();
-}
-
 /* ---- auto-scheduling: fill each day with as much as is reasonable ---------
    A day holds ~DAY_CAPACITY tasks per person, counting everything already on
    it across all inputs (appointments, that day's cleaning, to-dos, other
-   scheduled steps). Lindsay's work nights lower her capacity; her recovery
-   days (the day AFTER a night shift, when she's wiped) hold nothing. A single
-   project also caps at PROJ_PER_DAY steps a day so multi-step jobs still
-   breathe. Ben/Both fill any day with room. */
+   scheduled steps). Anyone's work nights lower THEIR capacity; their recovery
+   days (the day AFTER a night shift, when they're wiped) hold nothing. A
+   single project also caps at PROJ_PER_DAY steps a day so multi-step jobs
+   still breathe. People with no shifts fill any day with room. */
 const DAY_CAPACITY = 4;
 const PROJ_PER_DAY = 2;
 function dayBlockedFor(who, iso){
-  if(who==="lindsay") return shiftsForDate(prevISO(iso)).some(isNightShift);
-  return false;
+  if(who==="both") return false;
+  return shiftsFor(prevISO(iso), who).some(isNightShift);
 }
-function whoList(who){ return who==="both" ? ["ben","lindsay"] : [who]; }
+function whoList(who){ return who==="both" ? members().map(m=>m.id) : [who]; }
 function personCapacity(who, iso){
-  if(who==="lindsay"){
-    if(dayBlockedFor("lindsay", iso)) return 0;                  // recovery day: nothing
-    if(shiftsForDate(iso).length) return Math.max(1, DAY_CAPACITY-2);  // works that night: lighter
+  if(who!=="both"){
+    if(dayBlockedFor(who, iso)) return 0;                        // recovery day: nothing
+    if(shiftsFor(iso, who).length) return Math.max(1, DAY_CAPACITY-2);  // works that night: lighter
   }
   return DAY_CAPACITY;
 }
@@ -745,9 +824,13 @@ function apptsForDate(iso){
 }
 function apptDone(a, iso){ return a.repeat ? !!items["adone:"+a.id+":"+weekKeyOf(new Date(iso+"T00:00:00"))] : !!a.done; }
 
-/* Lindsay's work shifts — dated (or weekly-repeating), each with a start
-   time. Kept separate from the weekly template so summer changes are just
-   adding/removing shifts, never editing the recurring plan. */
+/* Work shifts — dated (or weekly-repeating), each with a start time and an
+   owner (who). Kept separate from the weekly template so summer changes are
+   just adding/removing shifts, never editing the recurring plan. */
+// Shifts saved before people-lists carried no owner: they were always the
+// original household's second slot. That fallback keeps them hers forever.
+function shiftWho(s){ return (s && s.who) || "lindsay"; }
+function shiftsFor(iso, who){ return shiftsForDate(iso).filter(s=>shiftWho(s)===who); }
 function shiftSkipKey(s, iso){ return "shiftskip:"+s.id+":"+weekKeyOf(new Date(iso+"T00:00:00")); }
 function shiftSkipped(s, iso){ return !!s.repeat && !!items[shiftSkipKey(s, iso)]; }
 function toggleShiftSkip(id){
@@ -766,14 +849,23 @@ function allShiftsOccurring(iso){
   return Object.values(items).filter(t=>t.kind==="shift"&&!t._gone&&apptOccursOn(t,iso))
     .sort((a,b)=>(a.start||"99:99").localeCompare(b.start||"99:99"));
 }
-// Lindsay's usual night starts, by weekday (Mon=0 … Sun=6): Mon & Tue 5:30 pm,
-// Fri 4 pm. Other days fall back to 5:30 pm. Just the Add-shift default — always
-// editable, and easy to change here if her regular nights shift.
+// Add-shift default start time: copy the owner's most recent shift on that
+// weekday (their usual), else the original household's habits (Mon & Tue
+// 5:30 pm, Fri 4 pm), else 5:30 pm. Always editable.
 const SHIFT_START_BY_DAY = { 0:"17:30", 1:"17:30", 4:"16:00" };
-function defaultShiftStart(dayIdx){ return SHIFT_START_BY_DAY[dayIdx] || "17:30"; }
-function addShift(){
+function defaultShiftStart(dayIdx, who){
+  const mine=Object.values(items).filter(t=>t.kind==="shift"&&!t._gone&&t.start&&t.date&&shiftWho(t)===who);
+  const sameDay=mine.filter(s=>weekdayOf(s.date)===dayIdx);
+  const pick=(sameDay.length?sameDay:mine).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];
+  if(pick) return pick.start;
+  return SHIFT_START_BY_DAY[dayIdx] || "17:30";
+}
+function addShift(mid){
+  // added from a person's day-card → theirs; otherwise the original
+  // household keeps its old habit (second slot), new ones default to you
+  const who = mid || (tunedHousehold() ? "lindsay" : (me || members()[0].id));
   const id="shift:"+Date.now()+Math.random().toString(36).slice(2,5);
-  put({ id, kind:"shift", label:"", date:selDayISO(), start:defaultShiftStart(selDay), end:"", repeat:false });
+  put({ id, kind:"shift", who, label:"", date:selDayISO(), start:defaultShiftStart(selDay, who), end:"", repeat:false });
   openEditor(id, true);
 }
 
@@ -789,6 +881,24 @@ function isNightShift(s){
   return false;
 }
 function prevISO(iso){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()-1); return isoOf(d); }
+/* one person's energy for the day, from their own shifts */
+function deriveEnergyFor(who, iso){
+  const today=shiftsFor(iso, who);
+  const workedLastNight=shiftsFor(prevISO(iso), who).some(isNightShift);
+  if(!today.length && !workedLastNight) return "";
+  const bits=[];
+  if(workedLastNight) bits.push("Off a night shift");
+  today.forEach(s=>{
+    const t=s.start ? " ("+fmtTime(s.start)+(s.end?"–"+fmtTime(s.end):"")+")" : "";
+    bits.push((isNightShift(s)?"works tonight":"day shift")+t);
+  });
+  let sentence=bits.join(" + "); sentence=sentence.charAt(0).toUpperCase()+sentence.slice(1);
+  let level="moderate";
+  if(workedLastNight && today.length) level="lightest";
+  else if(workedLastNight || today.some(isNightShift)) level="light";
+  return sentence+" — "+level;
+}
+/* the household's energy line (print + tests): all shifts together */
 function deriveEnergy(iso){
   const today=shiftsForDate(iso);
   const workedLastNight=shiftsForDate(prevISO(iso)).some(isNightShift);
@@ -810,6 +920,18 @@ function energyInfo(w, iso){
   if(d) return { text:d, derived:true };
   const info=items["info:"+w+":energy"];
   return { text: info?info.text:"", derived:false };
+}
+/* energy for one person's day-card. The editable weekday template line
+   belongs to the original second slot (it always described her days);
+   everyone else only gets a line when their shifts derive one. */
+function energyInfoFor(who, w, iso){
+  const d=deriveEnergyFor(who, iso);
+  if(d) return { text:d, derived:true };
+  if(who==="lindsay"){
+    const info=items["info:"+w+":energy"];
+    if(info && (info.text||"")!=="") return { text:info.text, derived:false };
+  }
+  return null;
 }
 function toggleAppt(id, iso){
   const a=items[id]; if(!a) return;
@@ -833,8 +955,23 @@ function comingUp(){
 }
 
 /* ============================== editor ============================ */
-function labelForInfo(f){ return f==="headline"?"Edit "+WHO.lindsay+"'s day":(f==="energy"?"Edit energy":(f==="furniture"?"Edit "+noteRowLabel().toLowerCase():"Edit")); }
-function updateEdWho(){ const b=document.getElementById("edWhoBtn"); b.className="who cyc "+edWho; b.textContent=WHO[edWho]; }
+function labelForInfo(t){
+  const f=t.field;
+  if(f==="headline") return "Edit "+(WHO.lindsay||"their")+"'s day";
+  if(f==="note")     return "Edit "+(WHO[t.mid]||"their")+"'s day";
+  if(f==="energy")   return "Edit energy";
+  if(f==="furniture") return "Edit "+noteRowLabel().toLowerCase();
+  return "Edit";
+}
+/* the For: row — one button per person, plus Everyone (never for shifts:
+   a shift is one person's). Tap picks; saving applies. */
+function updateEdWho(){
+  const row=document.getElementById("edWhoBtns"); if(!row) return;
+  const t=items[editingId]||{};
+  const opts = members().map(m=>[m.id, m.name]);
+  if(t.kind!=="shift") opts.push(["both", WHO.both]);
+  row.innerHTML = opts.map(o=>'<button class="who '+o[0]+(edWho===o[0]?' on':'')+'" data-who="'+o[0]+'">'+esc(o[1])+'</button>').join("");
+}
 function updateEdIcon(){ document.getElementById("edIconBtn").innerHTML='<svg><use href="#'+edIcon+'"/></svg>'; }
 function show(id, on){ document.getElementById(id).style.display = on?"":"none"; }
 function openEditor(id, fresh){
@@ -847,10 +984,11 @@ function openEditor(id, fresh){
   const isStep = t.kind==="pstep";
   const isAppt = t.kind==="appt";
   const isShift = t.kind==="shift";
-  const hasWho = t.kind==="todo" || (t.kind==="tpl" && t.check) || isProj || isAppt || isStep;
-  edWho=t.who||"ben"; edWhoStart=edWho; edIcon=t.icon||"i-paw";
+  const hasWho = t.kind==="todo" || (t.kind==="tpl" && t.check) || isProj || isAppt || isStep || isShift;
+  edWho = isShift ? shiftWho(t) : normWho(t.who||"both");
+  edWhoStart=edWho; edIcon=t.icon||"i-paw";
   let title="Edit item";
-  if(isInfo) title=labelForInfo(t.field);
+  if(isInfo) title=labelForInfo(t);
   else if(isCare) title="Edit note";
   else if(isProj) title="Edit project";
   else if(isStep) title="Edit step";
@@ -952,6 +1090,7 @@ function saveEditor(){
   if(t.kind==="shift"){
     // A shift's real content is its start time; the label is optional.
     t.label = text1;
+    t.who   = edWho;
     t.date  = document.getElementById("edDate").value || t.date;
     t.start = document.getElementById("edTime").value || "";
     t.end   = document.getElementById("edEnd").value || "";
@@ -1025,37 +1164,36 @@ function careHTML(text){
   if(i>0) return '<b>'+esc(text.slice(0,i))+'</b> '+esc(text.slice(i+3));
   return esc(text);
 }
-function byTag(w){ return w ? `<span class="bytag">${WHO[w]?WHO[w][0]:"?"}</span>` : ""; }
-
 function tplRow(it){
   const checked=isChecked(it.id);
-  const who=it.who||"both";
+  const who=normWho(it.who||"both");
   return `<li><div class="item ${who} ${checked?'done':''}" data-id="${it.id}">
     <div class="box" data-act="tplcheck"><svg><use href="#i-check"/></svg></div>
     <div class="lab"><span class="txt" data-act="edititem">${esc(it.text)}</span></div>
-    <button class="who ${who}" data-act="cycwho">${WHO[who]}</button>
+    <button class="who ${who}" data-act="editbtn">${whoLabel(who)}</button>
     <button class="editb" data-act="editbtn" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
 }
 function todoRow(t){
   const done=todoDone(t);
+  const who=normWho(t.who);
   const rep = t.repeat ? ` <span class="apptrep">weekly</span>` : "";
-  const sub = done && t.doneBy && !t.repeat ? `<span class="sub">done by ${WHO[t.doneBy]}</span>` : "";
-  return `<li><div class="item ${t.who} ${done?'done':''}" data-id="${t.id}">
+  const sub = done && t.doneBy && !t.repeat ? `<span class="sub">done by ${whoLabel(t.doneBy)}</span>` : "";
+  return `<li><div class="item ${who} ${done?'done':''}" data-id="${t.id}">
     <div class="box" data-act="todocheck"><svg><use href="#i-check"/></svg></div>
     <div class="lab"><span class="txt" data-act="edititem">${esc(t.text)}${rep}</span>${sub}</div>
-    <button class="who ${t.who}" data-act="cycwho">${WHO[t.who]}</button>
+    <button class="who ${who}" data-act="editbtn">${whoLabel(who)}</button>
     <button class="editb" data-act="editbtn" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
 }
 function schedStepRow(s){
   const p=projectOf(s);
-  const who=s.who||(p?p.who:"both")||"both";
+  const who=normWho(s.who||(p?p.who:"both")||"both");
   return `<li><div class="item ${who} reminder ${s.done?'done':''}" data-id="${s.id}">
     <div class="box" data-act="stepcheck"><svg><use href="#i-check"/></svg></div>
     <div class="lab"><span class="txt" data-act="editstep">${esc(s.text)}</span>
       <span class="sub"><svg class="tiny"><use href="#i-folder"/></svg> ${esc(p?p.title:"Project")}</span></div>
-    <button class="who ${who}" data-act="cycstepwho">${WHO[who]}</button>
+    <button class="who ${who}" data-act="editstep">${whoLabel(who)}</button>
     <button class="editb" data-act="editstep" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
 }
@@ -1070,24 +1208,61 @@ function shiftChip(s, skipped){
                       : (s.repeat ? ' <span class="apptrep">weekly</span>' : "");
   return `<span class="carechip shiftchip tap ${skipped?'skipped':''}" data-id="${s.id}" data-act="editshift"><svg><use href="#i-clock"/></svg><b>${esc(time)}${esc(span)}</b>${label}${tag}</span>`;
 }
-function energyMetaHTML(w, iso){
-  const en=energyInfo(w, iso);
-  if(en.derived){
-    return `<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(en.text)}</div></div>`;
-  }
-  return `<div class="meta tap" data-id="info:${w}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(en.text)}</div></div>`;
+/* The people card: one day-card per person — their day-note, shifts and
+   energy — side-scrollable, opening on your own. Household-level bits
+   (the free note row + care chips) sit below, outside the swipe. The
+   original second slot's card keeps the old headline + energy docs, so
+   nothing existing moves. */
+function personSlideHTML(m, allShifts){
+  const iso=selDayISO();
+  const mShifts=allShifts.filter(s=>shiftWho(s)===m.id);
+  const noteId = m.id==="lindsay" ? "info:"+selDay+":headline" : "info:"+selDay+":note:"+m.id;
+  const noteTxt = items[noteId] ? (items[noteId].text||"") : "";
+  const en = energyInfoFor(m.id, selDay, iso);
+  const col = MEMBER_COLORS[m.color][0];
+  const energyRow = !en ? "" : (en.derived
+    ? `<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(en.text)}</div></div>`
+    : `<div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(en.text)}</div></div>`);
+  return `<div class="slide" data-mid="${m.id}">
+      <div class="ctitle" style="color:${col}"><svg><use href="#i-heart"/></svg>${esc(m.name)}</div>
+      <p class="headline tap ${noteTxt?"":"dim"}" data-act="editnote" data-noteid="${noteId}">${noteTxt?esc(noteTxt):"Add a note about "+esc(m.name)+"'s day"}</p>
+      <div class="shiftrow">
+        <div class="lbl">Shifts</div>
+        <div class="carechips">
+          ${mShifts.map(s=>shiftChip(s, shiftSkipped(s, iso))).join("")}
+          <button class="carechip add" data-act="addshift" data-mid="${m.id}"><svg><use href="#i-plus"/></svg>Add shift</button>
+        </div>
+      </div>
+      ${energyRow?`<div class="metarow">${energyRow}</div>`:""}
+    </div>`;
+}
+function peopleCardHTML(allShifts, care){
+  const mems=members();
+  const meIdx=Math.max(0, mems.findIndex(m=>m.id===me));
+  return `<div class="card people">
+      <div class="rolodex" id="rolodex">${mems.map(m=>personSlideHTML(m, allShifts)).join("")}</div>
+      ${mems.length>1?`<div class="dots" id="rolodots">${mems.map((m,i)=>`<span class="${i===meIdx?"on":""}"></span>`).join("")}</div>`:""}
+      <div class="metarow">
+        <div class="meta tap" data-act="editnote" data-noteid="info:${selDay}:furniture"><div class="lbl">${noteRowLabel()}</div><div class="val">${esc(infoText(selDay,"furniture"))}</div></div>
+      </div>
+      <div class="carechips">
+        ${care.map(careChip).join("")}
+        <button class="carechip add" data-act="addcare" data-scope="${selDay}"><svg><use href="#i-plus"/></svg>Add</button>
+      </div>
+    </div>`;
 }
 function addMini(sec, scope, check){
   return `<button class="addmini" data-act="addtpl" data-sec="${sec}" data-scope="${scope}" data-check="${check?1:0}"><svg><use href="#i-plus"/></svg>Add</button>`;
 }
 function apptRow(a, iso){
   const done=apptDone(a, iso);
+  const who=normWho(a.who);
   const rep = a.repeat ? ` <span class="apptrep">weekly</span>` : "";
-  return `<li><div class="item ${a.who} ${done?'done':''}" data-id="${a.id}">
+  return `<li><div class="item ${who} ${done?'done':''}" data-id="${a.id}">
     <div class="box" data-act="apptcheck"><svg><use href="#i-check"/></svg></div>
     <div class="lab"><span class="txt" data-act="editappt">${esc(a.title||"Appointment")}</span>
       <span class="sub"><span class="appttime">${fmtTime(a.time)}</span>${rep}</span></div>
-    <button class="who ${a.who}" data-act="cycwho">${WHO[a.who]}</button>
+    <button class="who ${who}" data-act="editappt">${whoLabel(who)}</button>
     <button class="editb" data-act="editappt" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
 }
@@ -1095,7 +1270,7 @@ function comingUpHTML(){
   const list=comingUp();
   if(!list.length) return "";
   return `<div class="comingup"><div class="cuhd"><svg><use href="#i-clock"/></svg>Coming up</div>`+
-    list.map(o=>`<div class="curow"><b>${o.when}${o.a.time?" · "+fmtTime(o.a.time):""}</b> ${esc(o.a.title||"Appointment")} <span class="cuwho ${o.a.who}">${WHO[o.a.who]}</span></div>`).join("")+
+    list.map(o=>`<div class="curow"><b>${o.when}${o.a.time?" · "+fmtTime(o.a.time):""}</b> ${esc(o.a.title||"Appointment")} <span class="cuwho ${normWho(o.a.who)}">${whoLabel(o.a.who)}</span></div>`).join("")+
     `</div>`;
 }
 
@@ -1171,32 +1346,13 @@ function renderWeek(){
       <ul class="items">${appts.length?appts.map(a=>apptRow(a,selDayISO())).join(""):'<li class="emptyhint">No appointments — tap + Add.</li>'}</ul>
     </div>
 
-    <div class="card lindsay">
-      <div class="ctitle pink"><svg><use href="#i-heart"/></svg>With ${WHO.lindsay}</div>
-      <p class="headline tap" data-id="info:${selDay}:headline" data-act="edititem">${esc(infoText(selDay,"headline"))}</p>
-      <div class="shiftrow">
-        <div class="lbl">Shifts</div>
-        <div class="carechips">
-          ${shifts.map(s=>shiftChip(s, shiftSkipped(s, selDayISO()))).join("")}
-          <button class="carechip add" data-act="addshift"><svg><use href="#i-plus"/></svg>Add shift</button>
-        </div>
-      </div>
-      <div class="metarow">
-        ${energyMetaHTML(selDay, selDayISO())}
-        <div class="meta tap" data-id="info:${selDay}:furniture" data-act="edititem"><div class="lbl">${noteRowLabel()}</div><div class="val">${esc(infoText(selDay,"furniture"))}</div></div>
-      </div>
-      <div class="carechips">
-        ${care.map(careChip).join("")}
-        <button class="carechip add" data-act="addcare" data-scope="${selDay}"><svg><use href="#i-plus"/></svg>Add</button>
-      </div>
-    </div>
+    ${peopleCardHTML(shifts, care)}
 
     <div class="card">
       <div class="ctitle"><svg><use href="#i-tool"/></svg>To-dos</div>
       <ul class="items">${todoInner}</ul>
       <div class="addrow">
         <input type="text" id="newText" placeholder="Add a to-do for ${DAY_SHORT[selDay]}…" autocomplete="off" />
-        <button class="who cyc ${pendWho}" id="whoCyc" title="Tap to change person">${WHO[pendWho]}</button>
         <button class="add" id="addBtn" aria-label="Add"><svg width="22" height="22"><use href="#i-plus"/></svg></button>
       </div>
     </div>
@@ -1225,9 +1381,11 @@ function renderWeek(){
 /* master List — the digital "Household To-Do List": who, then area */
 function renderList(){
   const all=masterTodos();
-  const secs=[["both","Both of Us"],["ben",WHO.ben],["lindsay",WHO.lindsay]].map(function(g){
-    const w=g[0], label=g[1];
-    const mine=all.filter(t=>(t.who||"both")===w);
+  const groups=[["both", members().length>2?"Everyone":"Both of Us", null]]
+    .concat(members().map(m=>[m.id, m.name, MEMBER_COLORS[m.color][0]]));
+  const secs=groups.map(function(g){
+    const w=g[0], label=g[1], col=g[2];
+    const mine=all.filter(t=>normWho(t.who||"both")===w);
     if(!mine.length) return "";
     const open=mine.filter(t=>!t.done).length;
     const byArea=AREA_ORDER.map(a=>{
@@ -1235,7 +1393,7 @@ function renderList(){
       if(!rows.length) return "";
       return `<div class="grp">${esc(AREAS[a])}</div><ul class="items">${rows.map(todoRow).join("")}</ul>`;
     }).join("");
-    return `<div class="card"><div class="ctitle ${w==="lindsay"?"pink":""}"><svg><use href="#i-list"/></svg>${label} · ${open} to do</div>${byArea}</div>`;
+    return `<div class="card"><div class="ctitle"${col?` style="color:${col}"`:""}><svg><use href="#i-list"/></svg>${esc(label)} · ${open} to do</div>${byArea}</div>`;
   }).join("");
   const empty=`<div class="emptybig"><svg width="34" height="34"><use href="#i-list"/></svg><p>The master list is empty.<br>Type above, say it to Siri, or import a dump — it sorts itself.</p></div>`;
   document.getElementById("listBody").innerHTML = `
@@ -1293,7 +1451,7 @@ function projectCardHTML(p){
   return `<div class="proj" data-id="${p.id}">
     <div class="projhd">
       <span class="ptitle" data-act="editproj">${esc(p.title||"Untitled project")}</span>
-      <button class="who ${p.who}" data-act="cycprojwho">${WHO[p.who]}</button>
+      <button class="who ${normWho(p.who)}" data-act="editproj">${whoLabel(p.who)}</button>
       <button class="editb" data-act="editproj" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
     </div>
     <div class="pbar"><span style="width:${pct}%"></span></div>
@@ -1314,7 +1472,7 @@ function renderProjects(){
 
   let html="", lastWho=null;
   projs.forEach(p=>{
-    if(projSort==="who" && p.who!==lastWho){ html+=`<div class="grp">${WHO[p.who]||"—"}</div>`; lastWho=p.who; }
+    if(projSort==="who" && p.who!==lastWho){ html+=`<div class="grp">${whoLabel(p.who)}</div>`; lastWho=p.who; }
     html+=projectCardHTML(p);
   });
   if(!projs.length) html = `<div class="emptybig"><svg width="34" height="34"><use href="#i-folder"/></svg><p>No projects yet.<br>Add one to track a multi-step job like the stairs.</p></div>`;
@@ -1323,12 +1481,12 @@ function renderProjects(){
 }
 function stepRow(s){
   const p=projectOf(s);
-  const who=s.who||(p?p.who:"both")||"both";
+  const who=normWho(s.who||(p?p.who:"both")||"both");
   const sched = s.schedISO ? `<span class="sub"><svg class="tiny"><use href="#i-clock"/></svg> ${fmtDateShort(stepEffectiveISO(s))}${(!s.done&&s.schedISO<todayISO())?" (rolled to today)":""}</span>` : "";
   return `<li><div class="item ${who} ${s.done?'done':''}" data-id="${s.id}">
     <div class="box" data-act="stepcheck"><svg><use href="#i-check"/></svg></div>
     <div class="lab"><span class="txt" data-act="editstep">${esc(s.text)}</span>${sched}</div>
-    <button class="who ${who}" data-act="cycstepwho">${WHO[who]}</button>
+    <button class="who ${who}" data-act="editstep">${whoLabel(who)}</button>
     <button class="editb" data-act="editstep" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
 }
@@ -1347,7 +1505,10 @@ function renderNotes(){
       <div class="nstatus">${status}</div>
     </div>`;
   }).join("");
-  if(!notes.length) html = `<div class="emptybig"><svg width="34" height="34"><use href="#i-note"/></svg><p>No notes yet.<br>Leave one for ${me==="ben"?WHO.lindsay:(me==="lindsay"?WHO.ben:"each other")}.</p></div>`;
+  if(!notes.length){
+    const others=members().filter(m=>m.id!==me);
+    html = `<div class="emptybig"><svg width="34" height="34"><use href="#i-note"/></svg><p>No notes yet.<br>Leave one for ${others.length===1?esc(others[0].name):"each other"}.</p></div>`;
+  }
   document.getElementById("notesBody").innerHTML = html;
 }
 
@@ -1359,14 +1520,32 @@ function wireWeek(){
   });
   const add=document.getElementById("addBtn"), input=document.getElementById("newText");
   if(add&&input){ add.onclick=()=>addTodo(input.value); input.addEventListener("keydown",e=>{ if(e.key==="Enter") addTodo(input.value); }); }
-  const wc=document.getElementById("whoCyc");
-  if(wc) wc.onclick=()=>{ pendWho=WHO_ORDER[(WHO_ORDER.indexOf(pendWho)+1)%WHO_ORDER.length]; wc.className="who cyc "+pendWho; wc.textContent=WHO[pendWho]; };
+  wireRolodex();
+}
+/* the person-card carousel: open on your own card, remember where you
+   swiped to across re-renders, keep the dots in step */
+function wireRolodex(){
+  const ro=document.getElementById("rolodex"); if(!ro) return;
+  const slides=[...ro.querySelectorAll(".slide")];
+  if(slides.length<2) return;
+  let idx=slides.findIndex(s=>s.dataset.mid===rolodexMid);
+  if(idx<0) idx=Math.max(0, slides.findIndex(s=>s.dataset.mid===me));
+  const left=i=>slides[i].offsetLeft - slides[0].offsetLeft;
+  if(idx>0) ro.scrollLeft=left(idx);
+  const dots=document.querySelectorAll("#rolodots span");
+  const paint=i=>dots.forEach((d,j)=>d.classList.toggle("on", j===i));
+  paint(idx);
+  ro.addEventListener("scroll", ()=>{
+    const step=slides.length>1 ? left(1) : 1;
+    const i=Math.max(0, Math.min(slides.length-1, Math.round(ro.scrollLeft/Math.max(1,step))));
+    rolodexMid=slides[i].dataset.mid; paint(i);
+  }, {passive:true});
 }
 
 /* ===================== printable week (blank planner) ============= */
 function pItem(text, who){
   const both = who==="both";
-  const w = (who==="ben"||who==="lindsay") ? `<span class="pwho">${WHO[who]}</span>` : "";
+  const w = (who && who!=="both" && WHO[who]) ? `<span class="pwho">${WHO[who]}</span>` : "";
   return `<div class="pitem"><span class="pbox"></span><span class="${both?'pboth':''}">${esc(text)}</span> ${w}</div>`;
 }
 function printWeekHTML(){
@@ -1380,8 +1559,16 @@ function printWeekHTML(){
     const appts=apptsForDate(iso);
     h += `<div class="pday"><div class="pdayname">${DAY_FULL[i]}, ${d.toLocaleDateString("en-US",{month:"long",day:"numeric"})}</div>`;
     const shifts=shiftsForDate(iso);
-    h += `<div class="pmeta"><b>${WHO.lindsay}:</b> ${esc(infoText(i,"headline"))}</div>`;
-    if(shifts.length) h += `<div class="pmeta2">Shifts: ${shifts.map(s=>(s.start?fmtTime(s.start):"TBD")+(s.end?"–"+fmtTime(s.end):"")+(s.label?" "+s.label:"")).join(" · ")}</div>`;
+    members().forEach(m=>{
+      const nid = m.id==="lindsay" ? "info:"+i+":headline" : "info:"+i+":note:"+m.id;
+      const txt = items[nid] ? (items[nid].text||"") : "";
+      if(txt) h += `<div class="pmeta"><b>${m.name}:</b> ${esc(txt)}</div>`;
+    });
+    if(shifts.length){
+      const owners={}; shifts.forEach(s=>{ owners[shiftWho(s)]=1; });
+      const named = Object.keys(owners).length>1;   // several people work → say whose is whose
+      h += `<div class="pmeta2">Shifts: ${shifts.map(s=>(named?(WHO[shiftWho(s)]||"?")+" ":"")+(s.start?fmtTime(s.start):"TBD")+(s.end?"–"+fmtTime(s.end):"")+(s.label?" "+s.label:"")).join(" · ")}</div>`;
+    }
     h += `<div class="pmeta2">Energy: ${esc(energyInfo(i, iso).text)} · ${noteRowLabel()}: ${esc(infoText(i,"furniture"))}</div>`;
     if(care.length) h += `<div class="pmeta2">${care.map(c=>esc(c.text)).join(" · ")}</div>`;
     if(appts.length){
@@ -1400,7 +1587,8 @@ function printWeekHTML(){
   h += `<div class="psec">Every morning</div>` + tplList("morning","daily").map(r=>pItem(r.text,r.who)).join("");
   h += `<div class="psec">Every night</div>` + tplList("night","daily").map(r=>pItem(r.text,r.who)).join("");
   h += `<div class="psec">Each day</div>` + tplList("each","daily").map(r=>pItem(r.text,r.who)).join("");
-  h += `<div class="pfoot">Bold = needs both ${WHO.ben} &amp; ${WHO.lindsay}.</div></div>`;
+  const mems=members();
+  h += `<div class="pfoot">Bold = ${mems.length>2 ? "for everyone" : "needs both "+mems[0].name+" &amp; "+mems[1].name}.</div></div>`;
   return h;
 }
 function doPrint(){
@@ -1423,15 +1611,25 @@ if(HAS_DOM){
     if(act==="addtpl"){ const sc=el.dataset.scope; addTpl(el.dataset.sec, sc==="daily"?"daily":Number(sc), el.dataset.check==="1"); return; }
     if(act==="addcare"){ addCare(Number(el.dataset.scope)); return; }
     if(act==="addappt"){ addAppt(); return; }
-    if(act==="addshift"){ addShift(); return; }
+    if(act==="addshift"){ addShift(el.dataset.mid); return; }
+    if(act==="editnote"){
+      // a person's day-note: create the doc on first tap, then edit as usual
+      const nid=el.dataset.noteid;
+      if(!items[nid]){
+        // info:<weekday>:headline | info:<weekday>:furniture | info:<weekday>:note:<memberId>
+        const parts=nid.split(":");
+        const field = (parts[2]==="headline"||parts[2]==="furniture") ? parts[2] : "note";
+        put({ id:nid, kind:"info", weekday:Number(parts[1]), field, mid:parts[3]||null, text:"" });
+      }
+      openEditor(nid);
+      return;
+    }
     const row=el.closest("[data-id]"); if(!row) return;
     const id=row.dataset.id;
     if(act==="tplcheck"){ toggleTpl(id); row.classList.toggle("done"); refreshProgress(); }
     else if(act==="todocheck"){ toggleTodo(id); row.classList.toggle("done"); refreshProgress(); }
     else if(act==="stepcheck"){ toggleStep(id); render(); }
     else if(act==="apptcheck"){ toggleAppt(id, selDayISO()); render(); }
-    else if(act==="cycwho"){ cycleWho(id); }
-    else if(act==="cycstepwho"){ cycleStepWho(id); }
     else if(act==="edititem" || act==="editbtn"){ openEditor(id); }
     else if(act==="editstep" || act==="editappt" || act==="editshift"){ openEditor(id); }
   });
@@ -1459,7 +1657,6 @@ if(HAS_DOM){
     const row=el.closest("[data-id]"); if(!row) return;
     const id=row.dataset.id, act=el.dataset.act;
     if(act==="todocheck"){ toggleTodo(id); render(); }
-    else if(act==="cycwho"){ cycleWho(id); }
     else if(act==="edititem" || act==="editbtn"){ openEditor(id); }
   });
 
@@ -1473,10 +1670,8 @@ if(HAS_DOM){
     const row=el.closest("[data-id]"); if(!row) return;
     const id=row.dataset.id;
     if(act==="stepcheck"){ toggleStep(id); render(); }
-    else if(act==="cycstepwho"){ cycleStepWho(id); }
     else if(act==="editstep"){ openEditor(id); }
     else if(act==="editproj"){ openEditor(id); }
-    else if(act==="cycprojwho"){ cycleProjWho(id); }
   });
 
   /* notes view delegation */
@@ -1512,7 +1707,10 @@ if(HAS_DOM){
   };
 
   /* editor wiring */
-  document.getElementById("edWhoBtn").onclick=()=>{ edWho=WHO_ORDER[(WHO_ORDER.indexOf(edWho)+1)%WHO_ORDER.length]; updateEdWho(); };
+  document.getElementById("edWhoBtns").addEventListener("click", e=>{
+    const b=e.target.closest("[data-who]"); if(!b) return;
+    edWho=b.dataset.who; updateEdWho();
+  });
   document.getElementById("edIconBtn").onclick=()=>{ edIcon=CARE_ICONS[(CARE_ICONS.indexOf(edIcon)+1)%CARE_ICONS.length]; updateEdIcon(); };
   document.getElementById("edDateClear").onclick=()=>{ document.getElementById("edDate").value=""; };
   document.getElementById("edTimeClear").onclick=()=>{ document.getElementById("edTime").value=""; };
@@ -1533,30 +1731,95 @@ if(HAS_DOM){
     document.querySelectorAll(container+" [data-id]").forEach(b=> b.classList.toggle("on", b.dataset.id===val));
   }
   document.getElementById("welcomeId").addEventListener("click", e=>{
-    const b=e.target.closest("[data-id]"); if(!b) return;
-    welcomeId=b.dataset.id; paintIdPick("#welcomeId", welcomeId);
+    const b=e.target.closest("[data-idx]"); if(!b) return;
+    welcomeId=b.dataset.idx; paintWelcomeNames();
   });
-  /* the who-am-I buttons mirror whatever names are being typed */
+  /* the welcome card grows one name box per person (2 to start, up to 6);
+     the who-am-I buttons mirror whatever names are being typed */
+  function welcomeNameInputs(){ return Array.prototype.slice.call(document.querySelectorAll("#welcomeNames input")); }
+  function addWelcomeName(){
+    const wrap=document.getElementById("welcomeNames");
+    const n=welcomeNameInputs().length; if(n>=MAX_MEMBERS) return;
+    const inp=document.createElement("input");
+    inp.type="text"; inp.placeholder="Person "+(n+1); inp.autocomplete="off";
+    inp.addEventListener("input", paintWelcomeNames);
+    wrap.appendChild(inp);
+    paintWelcomeNames();
+    if(n>=2) inp.focus();
+  }
   function paintWelcomeNames(){
-    const a=cleanName(document.getElementById("welcomeNameA").value)||"Person 1";
-    const b=cleanName(document.getElementById("welcomeNameB").value)||"Person 2";
-    const qa=document.querySelector('#welcomeId [data-id="ben"]');
-    const qb=document.querySelector('#welcomeId [data-id="lindsay"]');
-    if(qa) qa.textContent=a;
-    if(qb) qb.textContent=b;
+    const names=welcomeNameInputs().map((el,i)=>cleanName(el.value)||("Person "+(i+1)));
+    const idp=document.getElementById("welcomeId");
+    idp.querySelectorAll("button").forEach(b=>b.remove());
+    names.forEach((nm,i)=>{
+      const b=document.createElement("button");
+      b.dataset.idx=String(i); b.textContent=nm;
+      b.classList.toggle("on", welcomeId===String(i));
+      idp.appendChild(b);
+    });
+    const addBtn=document.getElementById("welcomeAddPerson");
+    if(addBtn) addBtn.style.display = names.length>=MAX_MEMBERS ? "none" : "";
   }
   document.getElementById("setIdRow").addEventListener("click", e=>{
     const b=e.target.closest("[data-id]"); if(!b) return;
-    me=b.dataset.id; localStorage.setItem("ow-me", me); pendWho=me; paintIdPick("#setIdRow", me);
+    me=b.dataset.id; localStorage.setItem("ow-me", me); paintIdPick("#setIdRow", me);
   });
 
   /* settings + welcome */
   const overlaySettings=document.getElementById("settings");
   const overlayWelcome=document.getElementById("welcome");
+  let setPeopleDraft=[];   // working copy of the people list while settings is open
+  function nextFreeColor(){
+    const used=setPeopleDraft.map(m=>m.color);
+    for(let i=0;i<MEMBER_COLORS.length;i++) if(used.indexOf(i)<0) return i;
+    return setPeopleDraft.length % MEMBER_COLORS.length;
+  }
+  function paintSetPeople(){
+    const wrap=document.getElementById("setPeople"); if(!wrap) return;
+    wrap.innerHTML = setPeopleDraft.map((m,i)=>
+      '<div class="prow" data-i="'+i+'">'+
+        '<button class="pdot" data-act="pcolor" title="Tap to change colour" style="background:'+MEMBER_COLORS[m.color][0]+'"></button>'+
+        '<input type="text" value="'+esc(m.name)+'" placeholder="Name" autocomplete="off" />'+
+        (setPeopleDraft.length>2 ? '<button class="pdel" data-act="pdel" aria-label="Remove">✕</button>' : '')+
+      '</div>').join("");
+    const addBtn=document.getElementById("setAddPerson");
+    if(addBtn) addBtn.style.display = setPeopleDraft.length>=MAX_MEMBERS ? "none" : "";
+  }
+  function syncDraftNames(){
+    document.querySelectorAll("#setPeople .prow").forEach(row=>{
+      const i=Number(row.dataset.i);
+      const inp=row.querySelector("input");
+      if(setPeopleDraft[i] && inp) setPeopleDraft[i].name=cleanName(inp.value);
+    });
+  }
+  document.getElementById("setPeople").addEventListener("click", e=>{
+    const b=e.target.closest("[data-act]"); if(!b) return;
+    const row=b.closest(".prow"); if(!row) return;
+    const i=Number(row.dataset.i);
+    syncDraftNames();
+    if(b.dataset.act==="pcolor"){
+      setPeopleDraft[i].color=(setPeopleDraft[i].color+1)%MEMBER_COLORS.length;
+      paintSetPeople();
+    } else if(b.dataset.act==="pdel"){
+      if(setPeopleDraft.length<=2) return;
+      const m=setPeopleDraft[i];
+      if(m.id && !confirm("Remove "+(m.name||"this person")+"? Their tasks move to shared, and their shifts are removed. (Takes effect when you press Save.)")) return;
+      setPeopleDraft.splice(i,1);
+      paintSetPeople();
+    }
+  });
+  document.getElementById("setAddPerson").onclick=()=>{
+    if(setPeopleDraft.length>=MAX_MEMBERS) return;
+    syncDraftNames();
+    setPeopleDraft.push({ id:null, name:"", color:nextFreeColor() });
+    paintSetPeople();
+    const rows=document.querySelectorAll("#setPeople .prow input");
+    if(rows.length) rows[rows.length-1].focus();
+  };
   function openSettings(){
     document.getElementById("setCode").value=household;
-    document.getElementById("setNameA").value=WHO.ben;
-    document.getElementById("setNameB").value=WHO.lindsay;
+    setPeopleDraft = members().map(m=>({ id:m.id, name:m.name, color:m.color }));
+    paintSetPeople();
     // starter to-dos belong to the original household only
     document.getElementById("setReseed").style.display = namesDoc() ? "none" : "";
     paintIdPick("#setIdRow", me);
@@ -1598,14 +1861,33 @@ if(HAS_DOM){
   document.getElementById("printBtn").onclick=doPrint;
   document.getElementById("setClose").onclick=()=>overlaySettings.classList.remove("show");
   document.getElementById("setSave").onclick=()=>{
-    // Renamed someone? Save the names to this household (any phone can).
-    const na=cleanName(document.getElementById("setNameA").value);
-    const nb=cleanName(document.getElementById("setNameB").value);
-    if(na && nb && (na!==WHO.ben || nb!==WHO.lindsay)){
-      put(Object.assign({}, namesDoc()||{}, { id:"meta:names", kind:"names", ben:na, lindsay:nb }));
+    // Save the people list — renames, colours, added or removed people.
+    syncDraftNames();
+    const list=setPeopleDraft.filter(m=>m.id || m.name);   // an empty brand-new row just goes away
+    if(list.filter(m=>m.name).length<2){ alert("Keep at least two named people."); return; }
+    list.forEach((m,i)=>{ if(!m.name) m.name="Person "+(i+1); });
+    const usedIds={}; list.forEach(m=>{ if(m.id) usedIds[m.id]=1; });
+    list.forEach(m=>{ if(!m.id){ let id; do{ id="p"+Math.random().toString(36).slice(2,7); }while(usedIds[id]); usedIds[id]=1; m.id=id; } });
+    const plain=list.map(m=>({id:m.id, name:m.name, color:m.color}));
+    const removed=members().map(m=>m.id).filter(id=>!usedIds[id]);
+    if(JSON.stringify(plain)!==JSON.stringify(members().map(m=>({id:m.id,name:m.name,color:m.color})))){
+      // a removed person's tasks become shared; their shifts go away
+      removed.forEach(id=>{
+        Object.values(items).forEach(t=>{
+          if(!t || t._gone) return;
+          if(t.kind==="shift" && shiftWho(t)===id) drop(t.id);
+          else if(t.who===id){ t.who="both"; put(t); }
+        });
+      });
+      put({ id:"meta:members", kind:"members", list:plain });
+      // mirror the first two names into meta:names so a phone still on the
+      // old app version keeps showing the right names (noteLabel preserved)
+      put(Object.assign({}, namesDoc()||{}, { id:"meta:names", kind:"names",
+          ben:plain[0].name, lindsay:(plain[1]||{}).name||"Person 2" }));
+      if(removed.indexOf(me)>=0){ me=plain[0].id; localStorage.setItem("ow-me", me); }
       applyNames();
     }
-    const v=document.getElementById("setCode").value.trim(); if(!v){ render(); return; }
+    const v=document.getElementById("setCode").value.trim(); if(!v){ overlaySettings.classList.remove("show"); render(); return; }
     // Changing to a new code? Keep a copy of the plan so it can move along.
     const prevCode=household;
     const prev = (prevCode && v!==prevCode) ? Object.assign({}, items) : null;
@@ -1644,32 +1926,35 @@ if(HAS_DOM){
   document.getElementById("welcomeStart").onclick=()=>{
     const v=document.getElementById("welcomeCode").value.trim();
     if(!v){ document.getElementById("welcomeCode").focus(); return; }
-    const na=cleanName(document.getElementById("welcomeNameA").value);
-    const nb=cleanName(document.getElementById("welcomeNameB").value);
-    if(!na){ document.getElementById("welcomeNameA").focus(); return; }
-    if(!nb){ document.getElementById("welcomeNameB").focus(); return; }
-    if(!welcomeId){ document.getElementById("welcomeId").classList.add("shake"); setTimeout(()=>document.getElementById("welcomeId").classList.remove("shake"),400); return; }
-    household=v; me=welcomeId; pendWho=me;
+    const inputs=welcomeNameInputs();
+    const raw=inputs.map(el=>cleanName(el.value));
+    if(!raw[0]){ inputs[0].focus(); return; }
+    if(!raw[1]){ inputs[1].focus(); return; }
+    // an extra box added by mistake and left blank just gets skipped
+    const names=[], mapIdx=[];
+    raw.forEach((n,i)=>{ if(n){ mapIdx[i]=names.length; names.push(n); } else mapIdx[i]=-1; });
+    const picked = welcomeId==="" ? -1 : mapIdx[Number(welcomeId)];
+    if(picked==null || picked<0){ document.getElementById("welcomeId").classList.add("shake"); setTimeout(()=>document.getElementById("welcomeId").classList.remove("shake"),400); return; }
+    household=v; me=memberIdFor(picked);
     localStorage.setItem("ow-household",household); localStorage.setItem("ow-me", me);
     // names + picked identity travel to the first look at this household;
     // they only take effect if the code turns out to be brand new
-    localStorage.setItem("ow-pending-setup", JSON.stringify({ ben:na, lindsay:nb, picked: welcomeId==="ben"?na:nb }));
+    localStorage.setItem("ow-pending-setup", JSON.stringify({ people:names, picked:names[picked] }));
     overlayWelcome.classList.remove("show"); connect();
   };
 
   /* boot */
   if(!household || !me){
     document.getElementById("welcomeCode").value = household || "our-home-"+Math.random().toString(36).slice(2,8);
-    welcomeId = me || "";
-    paintIdPick("#welcomeId", welcomeId);
-    ["welcomeNameA","welcomeNameB"].forEach(id=> document.getElementById(id).addEventListener("input", paintWelcomeNames));
-    paintWelcomeNames();
+    welcomeId = "";
+    addWelcomeName(); addWelcomeName();
+    document.getElementById("welcomeAddPerson").onclick=addWelcomeName;
     // NOTE: no seeding before a code is chosen — the backdrop behind the
     // welcome card stays generic, so the public URL shows no family's plan.
     loadLocal(); render();
     overlayWelcome.classList.add("show");
   } else {
-    pendWho=me; connect();
+    connect();
   }
 
   if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
@@ -1888,9 +2173,40 @@ if(!HAS_DOM){
     // explicit names win over keyword guessing; "both" words still win overall
     console.log("classify: name beats keywords:", classify("fold laundry with Alex").who==="ben");
     console.log("classify: both still wins:", classify("family walk with Alex").who==="both");
-    console.log("classify: names are per-household:", classify("fold laundry with Maria").who==="lindsay");
+    // new households don't inherit the original family's habits: no name → Everyone
+    console.log("classify: neutral household guesses Everyone:", classify("fold laundry with Maria").who==="both");
+    console.log("classify: original household still keyword-guesses:", (function(){
+      const saved=items["meta:names"]; delete items["meta:names"];
+      const w=classify("fold laundry").who; items["meta:names"]=saved; return w==="lindsay";
+    })());
+    /* members: any number of people, each with their own shifts */
+    console.log("members: welcome seeded a members list:", !!membersDoc() && members().length===2);
+    items["meta:members"]={id:"meta:members",kind:"members",list:[
+      {id:"ben",name:"Alex",color:0},{id:"lindsay",name:"Jamie",color:1},{id:"p3",name:"Sam",color:2}]};
+    applyNames();
+    console.log("members: three people + Everyone:", WHO_ORDER.join(",")==="ben,lindsay,p3,both" && WHO.both==="Everyone" && WHO.p3==="Sam");
+    console.log("members: shared work spreads over all three:", whoList("both").length===3);
+    console.log("members: a night shift blocks ITS owner next day:", (function(){
+      items["shift:p3"]={id:"shift:p3",kind:"shift",who:"p3",date:"2026-08-03",start:"17:30",repeat:false};
+      const ok = dayBlockedFor("p3","2026-08-04")===true && dayBlockedFor("ben","2026-08-04")===false
+              && personCapacity("p3","2026-08-03")===Math.max(1,DAY_CAPACITY-2)
+              && /works tonight/i.test(deriveEnergyFor("p3","2026-08-03")) && deriveEnergyFor("ben","2026-08-03")==="";
+      delete items["shift:p3"]; return ok;
+    })());
+    console.log("members: ownerless shift stays the second slot's:", (function(){
+      items["shift:ol"]={id:"shift:ol",kind:"shift",date:"2026-08-03",start:"17:30",repeat:false};
+      const ok = dayBlockedFor("lindsay","2026-08-04")===true && dayBlockedFor("p3","2026-08-04")===false;
+      delete items["shift:ol"]; return ok;
+    })());
+    console.log("members: add-shift from a person's card is theirs:", (function(){
+      addShift("p3");
+      const s=Object.values(items).find(t=>t.kind==="shift"&&t.who==="p3");
+      const ok=!!s; if(s) drop(s.id); editingId=null; editingFresh=false; return ok;
+    })());
+    console.log("members: a gone person's tag reads as shared:", normWho("ghost")==="both" && whoLabel("ghost")===WHO.both);
     // names are cleaned so template injections stay safe
-    items["meta:names"]={id:"meta:names",kind:"names",ben:"<img src=x>Evil",lindsay:"O&K"};
+    items["meta:members"]={id:"meta:members",kind:"members",list:[
+      {id:"ben",name:"<img src=x>Evil",color:0},{id:"lindsay",name:"O&K",color:1}]};
     applyNames();
     console.log("names sanitized:", WHO.ben==="img src=xEvil" && WHO.lindsay==="OK");
     // a household that already has data is never overwritten by a joining phone

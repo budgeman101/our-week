@@ -235,7 +235,23 @@
   .statusline{font-size:13px; font-weight:600; margin:2px 0 10px; display:flex; align-items:center; gap:7px}
   .statusline.synced{color:var(--green)} .statusline.local{color:var(--muted)}
   .sheet .edwho{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--muted)}
-  .sheet .edwho .who.cyc{cursor:pointer; margin-top:0}
+  .sheet .edwho{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+  .sheet .edwho .edwhobtns{display:flex; gap:6px; flex-wrap:wrap}
+  .sheet .edwho .who{cursor:pointer; margin-top:0; opacity:.45; border:2px solid transparent}
+  .sheet .edwho .who.on{opacity:1; border-color:currentColor}
+  /* people-card rolodex (day view) */
+  .rolodex{display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:24px; scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .rolodex::-webkit-scrollbar{display:none}
+  .rolodex .slide{flex:0 0 100%; scroll-snap-align:start; min-width:0}
+  .dots{display:flex; gap:5px; justify-content:center; margin:8px 0 2px}
+  .dots span{width:6px; height:6px; border-radius:999px; background:var(--line)}
+  .dots span.on{background:#64748b}
+  .headline.dim{opacity:.55; font-style:italic}
+  /* people editor rows (settings) */
+  .prow{display:flex; gap:8px; align-items:center; margin-top:8px}
+  .prow input{flex:1; min-width:0; margin:0}
+  .pdot{width:26px; height:26px; border-radius:999px; border:2px solid rgba(0,0,0,.12); flex:0 0 auto; cursor:pointer; padding:0}
+  .pdel{flex:0 0 auto; border:0; background:none; color:#94a3b8; font-size:1rem; cursor:pointer; padding:4px 6px}
   .sheet .edicon{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--muted)}
   .sheet .edicon .iconpick{width:42px; height:36px; border:1px solid var(--line); border-radius:9px; background:#fff; cursor:pointer; display:inline-flex; align-items:center; justify-content:center}
   .sheet .edicon .iconpick svg{width:18px; height:18px; color:var(--lindsay)}
@@ -385,11 +401,7 @@
   </section>
 
   <footer>
-    <div class="legend">
-      <span class="lg"><span class="sw" style="background:var(--ben)"></span><span id="legendBen">Ben</span></span>
-      <span class="lg"><span class="sw" style="background:var(--lindsay)"></span><span id="legendLindsay">Lindsay</span></span>
-      <span class="lg"><span class="sw" style="background:var(--both)"></span>Both (bold)</span>
-    </div>
+    <div class="legend" id="legend"></div>
     Tap any line to edit · <b>+ Add</b> anywhere · checks save per week and sync to any phone sharing your household code.
   </footer>
 </div>
@@ -400,15 +412,11 @@
     <h2>Welcome</h2>
     <p>Pick a private <b>household code</b> — everyone in your home enters the <b>same</b> code to share one plan. Keep it secret: the code is the only key to your data.</p>
     <input type="text" id="welcomeCode" placeholder="e.g. our-home-2026-xyz" />
-    <p style="margin-top:14px">Your two names — put the partner whose <b>work shifts</b> you plan around second:</p>
-    <div style="display:flex; gap:8px">
-      <input type="text" id="welcomeNameA" placeholder="Person 1" autocomplete="off" />
-      <input type="text" id="welcomeNameB" placeholder="Person 2" autocomplete="off" />
-    </div>
+    <p style="margin-top:14px">The adults sharing this plan — you can rename, recolour or add people later in Settings:</p>
+    <div id="welcomeNames" style="display:flex; flex-direction:column; gap:8px"></div>
+    <button class="lnk" id="welcomeAddPerson" style="margin-top:8px">+ Add another adult</button>
     <div class="idpick" id="welcomeId">
       <span>This phone is:</span>
-      <button data-id="ben">Person 1</button>
-      <button data-id="lindsay">Person 2</button>
     </div>
     <button class="btn" id="welcomeStart">Start</button>
     <div class="meta">Until Firebase keys are added (see <code>SETUP-GUIDE.md</code>) this saves on <b>this device only</b> — no account needed.</div>
@@ -421,15 +429,10 @@
     <h2><svg width="19" height="19"><use href="#i-gear"/></svg> Settings <span class="pill" id="status">This device only</span></h2>
     <div class="statusline" id="setStatus"></div>
     <p>This phone is:</p>
-    <div class="idpick" id="setIdRow">
-      <button data-id="ben">Ben</button>
-      <button data-id="lindsay">Lindsay</button>
-    </div>
-    <p style="margin-top:16px">Your names (shown on tags and cards):</p>
-    <div style="display:flex; gap:8px">
-      <input type="text" id="setNameA" autocomplete="off" />
-      <input type="text" id="setNameB" autocomplete="off" />
-    </div>
+    <div class="idpick" id="setIdRow"></div>
+    <p style="margin-top:16px">Your people (shown on tags and cards) — tap a dot to change their colour:</p>
+    <div id="setPeople"></div>
+    <button class="lnk" id="setAddPerson" style="margin-top:8px">+ Add a person</button>
     <p style="margin-top:16px">Household code (must match on every phone that shares this plan):</p>
     <input type="text" id="setCode" />
     <button class="btn" id="setSave">Save</button>
@@ -450,7 +453,7 @@
   <div class="sheet">
     <h2><svg width="19" height="19"><use href="#i-edit"/></svg> <span id="edTitle">Edit</span></h2>
     <input type="text" id="edText" autocomplete="off" />
-    <div class="edwho" id="edWhoRow">For: <button class="who cyc" id="edWhoBtn">Ben</button> <span>(tap to change)</span></div>
+    <div class="edwho" id="edWhoRow">For: <span class="edwhobtns" id="edWhoBtns"></span></div>
     <div class="edicon" id="edIconRow" style="display:none">Icon: <button class="iconpick" id="edIconBtn"><svg><use href="#i-paw"/></svg></button> <span>(tap to change)</span></div>
     <div class="eddate" id="edDateRow" style="display:none">
       <label><span id="edDateLabel">Date</span> <input type="date" id="edDate" /></label>

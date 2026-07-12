@@ -1,7 +1,7 @@
 {
   "name": "Our Week — Household To-Do",
   "short_name": "Our Week",
-  "description": "Shared weekly to-do list for Ben and Lindsay.",
+  "description": "A household's shared weekly plan — days, projects, and handoff notes.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

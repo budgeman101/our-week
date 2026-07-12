@@ -35,5 +35,15 @@ ok("appt 'dayBefore' due 6:05pm the day before", dueReminders(on(2026, 7, 12)(18
 ok("shift without a start time is ignored", !dueReminders(at13(16, 35), [{ _id: "s", kind: "shift", date: "2026-07-13" }], cfg).length);
 ok("appt with remind='none' is ignored",    !dueReminders(at13(8, 10), [{ ...appt, remind: "none" }], cfg).length);
 
+/* --- per-household names: every family hears its own people --- */
+const mems = { _id: "meta:members", kind: "members", list: [
+  { id: "ben", name: "Dave", color: 0 }, { id: "lindsay", name: "Rosa", color: 1 }, { id: "p3", name: "Gran", color: 2 }] };
+ok("shift title uses its owner's name",        dueReminders(at13(16, 35), [mems, { ...shift, who: "p3" }], cfg)[0].title.indexOf("Gran's shift") === 0);
+ok("ownerless shift belongs to the 2nd slot",  dueReminders(at13(16, 35), [mems, shift], cfg)[0].title.indexOf("Rosa's shift") === 0);
+ok("appt names its person",                    dueReminders(at13(8, 10), [mems, appt], cfg)[0].body.indexOf("Rosa") === 0);
+ok("'both' reads Everyone in a 3-person home", dueReminders(at13(8, 10), [mems, { ...appt, who: "both" }], cfg)[0].body.indexOf("Everyone") === 0);
+ok("renamed pair still works via meta:names",  dueReminders(at13(16, 35), [{ _id: "meta:names", kind: "names", ben: "Alex", lindsay: "Jamie" }, shift], cfg)[0].title.indexOf("Jamie's shift") === 0);
+ok("no names anywhere → original defaults",    dueReminders(at13(16, 35), [shift], cfg)[0].title.indexOf("Lindsay's shift") === 0);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

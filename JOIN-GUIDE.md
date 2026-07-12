@@ -25,9 +25,10 @@ reminders, and the AI scanner are all tied to it.
 ## Getting set up (2 minutes per phone)
 
 1. Open **https://budgeman101.github.io/our-week/** on your phone.
-2. At the welcome card: type your family code, then your **two names** — put
-   the partner whose **work shifts** you plan around second (their shifts get
-   their own spot on each day, and the app plans around their work nights).
+2. At the welcome card: type your family code, then the **adults sharing the
+   plan** — two to start, **+ Add another adult** if you're more. Everyone
+   gets their own day-card and colour, and anyone's **work shifts** can go in
+   (the app plans around each person's work nights automatically).
 3. Tap whichever name is *you*, then **Start**.
 4. Make it a real app — it needs this for reminders too:
    - **iPhone (Safari):** Share → **Add to Home Screen**.
@@ -39,11 +40,14 @@ Repeat on the second phone with the same code — you now share one live plan.
 
 ## Good to know
 
-- **Tap anything to edit it.** Every line can be reworded, re-assigned
-  (tap the name chip), split in two, or deleted. **+ Add** is everywhere.
+- **Tap anything to edit it.** Every line can be reworded, re-assigned (the
+  edit screen has a button for each person), split in two, or deleted.
+  **+ Add** is everywhere.
 - **Type tasks in plain words** — "mow the lawn on Thursday" sorts itself to
-  the right person, area, and day. Using a name ("groceries with Sarah")
-  assigns it to them.
+  the right area and day. Using a name ("groceries with Sarah") assigns it to
+  them; otherwise it lands on **Everyone** until someone claims it.
+- **People change?** ⚙ Settings lets you rename anyone, change their colour,
+  or add/remove a person (up to 6 adults).
 - **Reminders** (shift and appointment nudges) — turn them on in ⚙ Settings
   on each phone once the app is on your Home Screen.
 - **The AI scanner** (snap a receipt or a handwritten list, import a recipe
