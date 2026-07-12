@@ -1,6 +1,6 @@
 /* Our Week — offline cache (also covers the full Our Kitchen app at ./kitchen/).
    Bump CACHE when you change files so phones pick up the update. */
-const CACHE = "our-week-v28";
+const CACHE = "our-week-v29";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png",
+  "./maskable-512.png",
   "./kitchen/",
   "./kitchen/index.html",
   "./kitchen/icon-180.png"
