@@ -610,6 +610,10 @@ function migrateRemoveJohny(){
 /* ============================= selectors ========================== */
 function infoText(w, field){ const d=items["info:"+w+":"+field]; return d ? d.text : ""; }
 function careItems(w){ return Object.values(items).filter(t=>t.kind==="tpl"&&t.sec==="care"&&t.scope===w&&!t._gone).sort(byOrder); }
+/* care chips live on one person's day-card; chips from before people-lists
+   (no mid) were always shown on the original second slot's card, so that's
+   where they stay */
+function careItemsFor(w, mid){ return careItems(w).filter(c=>(c.mid||"lindsay")===mid); }
 function tplList(sec, scope){ return Object.values(items).filter(t=>t.kind==="tpl"&&t.sec===sec&&t.scope===scope&&!t._gone).sort(byOrder); }
 // per-week done for a recurring to-do; plain done otherwise
 function todoDoneKey(t, wk){ return "tdone:"+t.id+":"+(wk||curWeekKey()); }
@@ -694,17 +698,17 @@ function importMany(arr){
   });
   return n;
 }
-function addTpl(sec, scope, check){
+function addTpl(sec, scope, check, mid){
   const id="u:"+Date.now()+Math.random().toString(36).slice(2,5);
   const list = sec==="care" ? careItems(scope) : tplList(sec, scope);
   const order = list.length ? Math.max.apply(null, list.map(x=>x.order||0))+1 : 0;
   const doc={ id, kind:"tpl", sec, scope, check:!!check, text:"", order };
   if(check) doc.who="both";
-  if(sec==="care") doc.icon="i-paw";
+  if(sec==="care"){ doc.icon="i-paw"; if(mid) doc.mid=mid; }
   put(doc);
   openEditor(id, true);
 }
-function addCare(w){ addTpl("care", w, false); }
+function addCare(w, mid){ addTpl("care", w, false, mid); }
 
 /* notes */
 function addNote(text){
@@ -1217,24 +1221,30 @@ function shiftChip(s, skipped){
                       : (s.repeat ? ' <span class="apptrep">weekly</span>' : "");
   return `<span class="carechip shiftchip tap ${skipped?'skipped':''}" data-id="${s.id}" data-act="editshift"><svg><use href="#i-clock"/></svg><b>${esc(time)}${esc(span)}</b>${label}${tag}</span>`;
 }
-/* The people card: one day-card per person — their day-note, shifts and
-   energy — side-scrollable, opening on your own. Household-level bits
-   (the free note row + care chips) sit below, outside the swipe. The
-   original second slot's card keeps the old headline + energy docs, so
-   nothing existing moves. */
+/* The people card: one FULL day-card per person — day-note, shifts,
+   energy, the free note row and care chips are all theirs — swipe to
+   change person, opening on your own. The original second slot's card
+   keeps every pre-existing doc (headline, energy, furniture, care), so
+   nothing existing moves; other people's cards start as placeholders
+   that fill in on tap. */
 function personSlideHTML(m, allShifts){
   const iso=selDayISO();
   const mShifts=allShifts.filter(s=>shiftWho(s)===m.id);
   const noteId = m.id==="lindsay" ? "info:"+selDay+":headline" : "info:"+selDay+":note:"+m.id;
   const noteTxt = items[noteId] ? (items[noteId].text||"") : "";
+  const furnId = m.id==="lindsay" ? "info:"+selDay+":furniture" : "info:"+selDay+":furniture:"+m.id;
+  const furnTxt = items[furnId] ? (items[furnId].text||"") : "";
   const en = energyInfoFor(m.id, selDay, iso);
   const col = MEMBER_COLORS[m.color][0];
-  const energyRow = !en ? "" : (en.derived
-    ? `<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(en.text)}</div></div>`
-    : `<div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(en.text)}</div></div>`);
+  const energyRow = en
+    ? (en.derived
+      ? `<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(en.text)}</div></div>`
+      : `<div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(en.text)}</div></div>`)
+    : `<div class="meta"><div class="lbl">Energy</div><div class="val"><span class="ph">fills in from work shifts</span></div></div>`;
+  const care=careItemsFor(selDay, m.id);
   return `<div class="slide" data-mid="${m.id}">
       <div class="ctitle" style="color:${col}"><svg><use href="#i-heart"/></svg>${esc(m.name)}</div>
-      <p class="headline tap ${noteTxt?"":"dim"}" data-act="editnote" data-noteid="${noteId}">${noteTxt?esc(noteTxt):"Add a note about "+esc(m.name)+"'s day"}</p>
+      <p class="headline tap ${noteTxt?"":"dim"}" data-act="editnote" data-noteid="${noteId}">${noteTxt?esc(noteTxt):"How "+esc(m.name)+"'s day goes — tap to write it"}</p>
       <div class="shiftrow">
         <div class="lbl">Shifts</div>
         <div class="carechips">
@@ -1242,22 +1252,22 @@ function personSlideHTML(m, allShifts){
           <button class="carechip add" data-act="addshift" data-mid="${m.id}"><svg><use href="#i-plus"/></svg>Add shift</button>
         </div>
       </div>
-      ${energyRow?`<div class="metarow">${energyRow}</div>`:""}
+      <div class="metarow">
+        ${energyRow}
+        <div class="meta tap" data-act="editnote" data-noteid="${furnId}"><div class="lbl">${noteRowLabel()}</div><div class="val">${furnTxt?esc(furnTxt):'<span class="ph">tap to add</span>'}</div></div>
+      </div>
+      <div class="carechips">
+        ${care.map(careChip).join("")}
+        <button class="carechip add" data-act="addcare" data-scope="${selDay}" data-mid="${m.id}"><svg><use href="#i-plus"/></svg>Add</button>
+      </div>
     </div>`;
 }
-function peopleCardHTML(allShifts, care){
+function peopleCardHTML(allShifts){
   const mems=members();
   const meIdx=Math.max(0, mems.findIndex(m=>m.id===me));
   return `<div class="card people">
       <div class="rolodex" id="rolodex">${mems.map(m=>personSlideHTML(m, allShifts)).join("")}</div>
       ${mems.length>1?`<div class="dots" id="rolodots">${mems.map((m,i)=>`<span class="${i===meIdx?"on":""}"></span>`).join("")}</div>`:""}
-      <div class="metarow">
-        <div class="meta tap" data-act="editnote" data-noteid="info:${selDay}:furniture"><div class="lbl">${noteRowLabel()}</div><div class="val">${esc(infoText(selDay,"furniture"))}</div></div>
-      </div>
-      <div class="carechips">
-        ${care.map(careChip).join("")}
-        <button class="carechip add" data-act="addcare" data-scope="${selDay}"><svg><use href="#i-plus"/></svg>Add</button>
-      </div>
     </div>`;
 }
 function addMini(sec, scope, check){
@@ -1334,7 +1344,6 @@ function renderWeek(){
   const pr=dayProgress();
   const todos=todosForSel();
   const sched=scheduledStepsFor(selDayISO());
-  const care=careItems(selDay);
   const clean=tplList("clean",selDay);
   const appts=apptsForDate(selDayISO());
   const shifts=allShiftsOccurring(selDayISO());
@@ -1355,7 +1364,7 @@ function renderWeek(){
       <ul class="items">${appts.length?appts.map(a=>apptRow(a,selDayISO())).join(""):'<li class="emptyhint">No appointments — tap + Add.</li>'}</ul>
     </div>
 
-    ${peopleCardHTML(shifts, care)}
+    ${peopleCardHTML(shifts)}
 
     <div class="card">
       <div class="ctitle"><svg><use href="#i-tool"/></svg>To-dos</div>
@@ -1570,15 +1579,18 @@ function printWeekHTML(){
     const shifts=shiftsForDate(iso);
     members().forEach(m=>{
       const nid = m.id==="lindsay" ? "info:"+i+":headline" : "info:"+i+":note:"+m.id;
-      const txt = items[nid] ? (items[nid].text||"") : "";
-      if(txt) h += `<div class="pmeta"><b>${m.name}:</b> ${esc(txt)}</div>`;
+      const fid = m.id==="lindsay" ? "info:"+i+":furniture" : "info:"+i+":furniture:"+m.id;
+      const bits=[];
+      if(items[nid] && items[nid].text) bits.push(esc(items[nid].text));
+      if(items[fid] && items[fid].text) bits.push(noteRowLabel()+": "+esc(items[fid].text));
+      if(bits.length) h += `<div class="pmeta"><b>${m.name}:</b> ${bits.join(" · ")}</div>`;
     });
     if(shifts.length){
       const owners={}; shifts.forEach(s=>{ owners[shiftWho(s)]=1; });
       const named = Object.keys(owners).length>1;   // several people work → say whose is whose
       h += `<div class="pmeta2">Shifts: ${shifts.map(s=>(named?(WHO[shiftWho(s)]||"?")+" ":"")+(s.start?fmtTime(s.start):"TBD")+(s.end?"–"+fmtTime(s.end):"")+(s.label?" "+s.label:"")).join(" · ")}</div>`;
     }
-    h += `<div class="pmeta2">Energy: ${esc(energyInfo(i, iso).text)} · ${noteRowLabel()}: ${esc(infoText(i,"furniture"))}</div>`;
+    h += `<div class="pmeta2">Energy: ${esc(energyInfo(i, iso).text)}</div>`;
     if(care.length) h += `<div class="pmeta2">${care.map(c=>esc(c.text)).join(" · ")}</div>`;
     if(appts.length){
       h += `<div class="psec">Appointments</div>`;
@@ -1618,7 +1630,7 @@ if(HAS_DOM){
     const el=e.target.closest("[data-act]"); if(!el) return;
     const act=el.dataset.act;
     if(act==="addtpl"){ const sc=el.dataset.scope; addTpl(el.dataset.sec, sc==="daily"?"daily":Number(sc), el.dataset.check==="1"); return; }
-    if(act==="addcare"){ addCare(Number(el.dataset.scope)); return; }
+    if(act==="addcare"){ addCare(Number(el.dataset.scope), el.dataset.mid); return; }
     if(act==="addappt"){ addAppt(); return; }
     if(act==="addshift"){ addShift(el.dataset.mid); return; }
     if(act==="editnote"){
@@ -2213,6 +2225,14 @@ if(!HAS_DOM){
       const ok=!!s; if(s) drop(s.id); editingId=null; editingFresh=false; return ok;
     })());
     console.log("members: a gone person's tag reads as shared:", normWho("ghost")==="both" && whoLabel("ghost")===WHO.both);
+    console.log("members: care chips follow their person:", (function(){
+      items["care:t1"]={id:"care:t1",kind:"tpl",sec:"care",scope:0,text:"Old chip",icon:"i-paw",order:0};             // pre-members: no mid
+      items["care:t2"]={id:"care:t2",kind:"tpl",sec:"care",scope:0,text:"Sam breakfast",icon:"i-child",order:1,mid:"p3"};
+      const ok = careItemsFor(0,"lindsay").some(c=>c.id==="care:t1")
+              && careItemsFor(0,"p3").some(c=>c.id==="care:t2")
+              && careItemsFor(0,"ben").length===0;
+      delete items["care:t1"]; delete items["care:t2"]; return ok;
+    })());
     // names are cleaned so template injections stay safe
     items["meta:members"]={id:"meta:members",kind:"members",list:[
       {id:"ben",name:"<img src=x>Evil",color:0},{id:"lindsay",name:"O&K",color:1}]};
