@@ -885,7 +885,9 @@ function defaultShiftStart(dayIdx, who){
   const sameDay=mine.filter(s=>weekdayOf(s.date)===dayIdx);
   const pick=(sameDay.length?sameDay:mine).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];
   if(pick) return pick.start;
-  return SHIFT_START_BY_DAY[dayIdx] || "17:30";
+  // first-ever shift: the evening habit belongs to the original household;
+  // everyone else starts from a plain morning
+  return tunedHousehold() ? (SHIFT_START_BY_DAY[dayIdx] || "17:30") : "09:00";
 }
 function addShift(mid){
   // added from a person's day-card → theirs; otherwise the original
@@ -903,11 +905,14 @@ function toMin(hhmm){ const p=String(hhmm||"").split(":"); return (+p[0]||0)*60+
 function isNightShift(s){
   if(!s || !s.start) return false;
   const st=toMin(s.start);
-  if(st>=14*60) return true;                                  // starts 2 pm or later
-  // crosses midnight / ends 11 pm or later. (Not 10 pm: a day-start shift
-  // running to 10 pm is a LONG day, not a night — no recovery day after.)
-  if(s.end){ const en=toMin(s.end); if(en<=st || en>=23*60) return true; }
-  return false;
+  if(s.end){
+    // With an end time, only running LATE makes it a night: crossing
+    // midnight or ending 11 pm+. An afternoon block (say 2–6 pm) is a
+    // day shift — no recovery day after it.
+    const en=toMin(s.end);
+    return en<=st || en>=23*60;
+  }
+  return st>=14*60;   // no end given: a 2 pm+ start reads as an evening/night
 }
 function prevISO(iso){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()-1); return isoOf(d); }
 /* one person's energy for the day, from their own shifts: recovering
@@ -2456,6 +2461,15 @@ if(!HAS_DOM){
       delete items["rules:p3"]; delete items["shift:t1"];
       return /— moderate$/.test(relaxed) && /— light$/.test(strict);
     })());
+    console.log("members: an afternoon block is a DAY shift, not a night:", (function(){
+      items["shift:pm"]={id:"shift:pm",kind:"shift",who:"p3",date:"2026-08-05",start:"14:00",end:"18:00",repeat:false};
+      const day = !isNightShift(items["shift:pm"]) && /— moderate$/.test(deriveEnergyFor("p3","2026-08-05"));
+      const noRec = dayBlockedFor("p3","2026-08-06")===false;
+      const endless = isNightShift({start:"17:30",end:""});   // no end + late start stays a night (the original shifts)
+      delete items["shift:pm"];
+      return day && noRec && endless;
+    })());
+    console.log("members: first-shift default start is morning for new families:", defaultShiftStart(0,"p3")==="09:00");
     console.log("members: care chips follow their person:", (function(){
       items["care:t1"]={id:"care:t1",kind:"tpl",sec:"care",scope:0,text:"Old chip",icon:"i-paw",order:0};             // pre-members: no mid
       items["care:t2"]={id:"care:t2",kind:"tpl",sec:"care",scope:0,text:"Sam breakfast",icon:"i-child",order:1,mid:"p3"};
