@@ -134,6 +134,17 @@ function paintIdRow(list){
 /* the partner card's free note row: "Furniture" for the original
    household, "Notes" for households created via the new welcome setup */
 function noteRowLabel(){ const n=namesDoc(); return (n && n.noteLabel) || "Furniture"; }
+/* ---------------- per-person day rules (behind the scenes) --------- *
+ *  rules:<mid> doc = { rowLabel, night, recovery, day, free }.
+ *  rowLabel renames that person's optional-task row ("Furniture",
+ *  "Study", …). The four texts fill the row automatically from their
+ *  shifts, so it changes day to day; a note typed on the day itself
+ *  always wins. No doc = today's behaviour, nothing auto-fills. */
+function rulesDoc(mid){ const d=items["rules:"+mid]; return (d && !d._gone) ? d : null; }
+function noteRowLabelFor(mid){
+  const r=rulesDoc(mid);
+  return (r && cleanName(r.rowLabel)) || noteRowLabel();
+}
 function escRe(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
 /* an explicit name in the text beats keyword guessing — keywords are
    a household's habits, a name is a direct instruction */
@@ -946,6 +957,24 @@ function energyInfoFor(who, w, iso){
   }
   return null;
 }
+/* which of the four rule situations this person is in that day */
+function shiftSituation(mid, iso){
+  if(shiftsFor(prevISO(iso), mid).some(isNightShift)) return "recovery";
+  const today=shiftsFor(iso, mid);
+  if(today.some(isNightShift)) return "night";
+  if(today.length) return "day";
+  return "free";
+}
+/* the optional-task row's value: the day's own note wins, else the
+   person's rule text for today's shift situation, else nothing */
+function rowValueFor(mid, w, iso){
+  const id = mid==="lindsay" ? "info:"+w+":furniture" : "info:"+w+":furniture:"+mid;
+  const d=items[id];
+  if(d && !d._gone && (d.text||"")!=="") return { text:d.text, auto:false };
+  const r=rulesDoc(mid);
+  if(r){ const t=r[shiftSituation(mid, iso)]; if((t||"")!=="") return { text:t, auto:true }; }
+  return null;
+}
 function toggleAppt(id, iso){
   const a=items[id]; if(!a) return;
   if(a.repeat){
@@ -1115,6 +1144,8 @@ function saveEditor(){
   }
   if(!text1){
     if(editingFresh){ editingFresh=false; deleteSilently(editingId); editingId=null; closeEditorRaw(); render(); return; }
+    // clearing an info line is fine — the row goes back to its rule/placeholder
+    if(t.kind==="info"){ t.text=""; put(t); editingId=null; closeEditorRaw(); render(); return; }
     document.getElementById("edText").focus(); return;
   }
   if(t.kind==="project"||t.kind==="appt") t.title=text1; else t.text=text1;
@@ -1233,14 +1264,12 @@ function personSlideHTML(m, allShifts){
   const noteId = m.id==="lindsay" ? "info:"+selDay+":headline" : "info:"+selDay+":note:"+m.id;
   const noteTxt = items[noteId] ? (items[noteId].text||"") : "";
   const furnId = m.id==="lindsay" ? "info:"+selDay+":furniture" : "info:"+selDay+":furniture:"+m.id;
-  const furnTxt = items[furnId] ? (items[furnId].text||"") : "";
+  const rv = rowValueFor(m.id, selDay, iso);
   const en = energyInfoFor(m.id, selDay, iso);
   const col = MEMBER_COLORS[m.color][0];
-  const energyRow = en
-    ? (en.derived
-      ? `<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(en.text)}</div></div>`
-      : `<div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(en.text)}</div></div>`)
-    : `<div class="meta"><div class="lbl">Energy</div><div class="val"><span class="ph">fills in from work shifts</span></div></div>`;
+  const energyRow = !en ? "" : (en.derived
+    ? `<div class="meta"><div class="lbl">Energy <span class="auto">· from shifts</span></div><div class="val">${esc(en.text)}</div></div>`
+    : `<div class="meta tap" data-id="info:${selDay}:energy" data-act="edititem"><div class="lbl">Energy</div><div class="val">${esc(en.text)}</div></div>`);
   const care=careItemsFor(selDay, m.id);
   return `<div class="slide" data-mid="${m.id}">
       <div class="ctitle" style="color:${col}"><svg><use href="#i-heart"/></svg>${esc(m.name)}</div>
@@ -1250,11 +1279,12 @@ function personSlideHTML(m, allShifts){
         <div class="carechips">
           ${mShifts.map(s=>shiftChip(s, shiftSkipped(s, iso))).join("")}
           <button class="carechip add" data-act="addshift" data-mid="${m.id}"><svg><use href="#i-plus"/></svg>Add shift</button>
+          <button class="carechip add" data-act="dayrules" data-mid="${m.id}"><svg><use href="#i-gear"/></svg>Shifts &amp; rules</button>
         </div>
       </div>
       <div class="metarow">
         ${energyRow}
-        <div class="meta tap" data-act="editnote" data-noteid="${furnId}"><div class="lbl">${noteRowLabel()}</div><div class="val">${furnTxt?esc(furnTxt):'<span class="ph">tap to add</span>'}</div></div>
+        <div class="meta tap" data-act="editnote" data-noteid="${furnId}"><div class="lbl">${esc(noteRowLabelFor(m.id))}${rv&&rv.auto?' <span class="auto">· from shifts</span>':''}</div><div class="val">${rv?esc(rv.text):'<span class="ph">tap to add</span>'}</div></div>
       </div>
       <div class="carechips">
         ${care.map(careChip).join("")}
@@ -1579,10 +1609,10 @@ function printWeekHTML(){
     const shifts=shiftsForDate(iso);
     members().forEach(m=>{
       const nid = m.id==="lindsay" ? "info:"+i+":headline" : "info:"+i+":note:"+m.id;
-      const fid = m.id==="lindsay" ? "info:"+i+":furniture" : "info:"+i+":furniture:"+m.id;
       const bits=[];
       if(items[nid] && items[nid].text) bits.push(esc(items[nid].text));
-      if(items[fid] && items[fid].text) bits.push(noteRowLabel()+": "+esc(items[fid].text));
+      const rv=rowValueFor(m.id, i, iso);
+      if(rv) bits.push(noteRowLabelFor(m.id)+": "+esc(rv.text));
       if(bits.length) h += `<div class="pmeta"><b>${m.name}:</b> ${bits.join(" · ")}</div>`;
     });
     if(shifts.length){
@@ -1633,16 +1663,25 @@ if(HAS_DOM){
     if(act==="addcare"){ addCare(Number(el.dataset.scope), el.dataset.mid); return; }
     if(act==="addappt"){ addAppt(); return; }
     if(act==="addshift"){ addShift(el.dataset.mid); return; }
+    if(act==="dayrules"){ openPersonSheet(el.dataset.mid); return; }
     if(act==="editnote"){
       // a person's day-note: create the doc on first tap, then edit as usual
       const nid=el.dataset.noteid;
-      if(!items[nid]){
-        // info:<weekday>:headline | info:<weekday>:furniture | info:<weekday>:note:<memberId>
+      const ex=items[nid];
+      if(!ex || ex._gone){
+        // info:<weekday>:headline | info:<weekday>:furniture[:<memberId>] | info:<weekday>:note:<memberId>
         const parts=nid.split(":");
         const field = (parts[2]==="headline"||parts[2]==="furniture") ? parts[2] : "note";
-        put({ id:nid, kind:"info", weekday:Number(parts[1]), field, mid:parts[3]||null, text:"" });
-      }
-      openEditor(nid);
+        // start the row's editor from today's rule text, so tweaking
+        // just-this-day is one edit; cancelling falls back to the rule
+        let prefill="";
+        if(field==="furniture"){
+          const rv=rowValueFor(parts[3]||"lindsay", Number(parts[1]), selDayISO());
+          if(rv) prefill=rv.text;
+        }
+        put({ id:nid, kind:"info", weekday:Number(parts[1]), field, mid:parts[3]||null, text:prefill });
+        openEditor(nid, true);
+      } else openEditor(nid);
       return;
     }
     const row=el.closest("[data-id]"); if(!row) return;
@@ -1785,6 +1824,51 @@ if(HAS_DOM){
     const b=e.target.closest("[data-id]"); if(!b) return;
     me=b.dataset.id; localStorage.setItem("ow-me", me); paintIdPick("#setIdRow", me);
   });
+
+  /* ---- person sheet: all their shifts + the day rules ---- */
+  const overlayPerson=document.getElementById("personSheet");
+  let personMid=null;
+  function psShiftRow(s){
+    const t=(s.start?fmtTime(s.start):"time TBD")+(s.end?"–"+fmtTime(s.end):"");
+    const when=s.repeat ? "Every "+DAY_SHORT[weekdayOf(s.date)] : fmtDateShort(s.date);
+    return `<button class="srow" data-shift="${s.id}"><b>${when}</b>&nbsp;· ${esc(t)}${s.label?' <span class="shiftlabel">'+esc(s.label)+'</span>':''}<span class="sedit">edit</span></button>`;
+  }
+  function openPersonSheet(mid){
+    personMid=mid;
+    const m=members().find(x=>x.id===mid) || {name:"?", color:0};
+    const nm=document.getElementById("psName");
+    nm.textContent=m.name; nm.style.color=MEMBER_COLORS[m.color][0];
+    const all=Object.values(items).filter(t=>t.kind==="shift"&&!t._gone&&shiftWho(t)===mid);
+    const weekly=all.filter(s=>s.repeat).sort((a,b)=>(weekdayOf(a.date)-weekdayOf(b.date))||String(a.start||"").localeCompare(String(b.start||"")));
+    const today=todayISO();
+    const oneoffs=all.filter(s=>!s.repeat&&s.date>=today).sort((a,b)=>String(a.date).localeCompare(String(b.date))).slice(0,12);
+    document.getElementById("psShifts").innerHTML =
+      (weekly.length?'<div class="psgrp">Every week</div>'+weekly.map(psShiftRow).join(""):'<div class="pshint">No weekly shifts yet — add one and tick "Repeats weekly".</div>')+
+      (oneoffs.length?'<div class="psgrp">Coming up (one-offs)</div>'+oneoffs.map(psShiftRow).join(""):"");
+    const r=rulesDoc(mid)||{};
+    const lbl=document.getElementById("psLabel");
+    lbl.value=r.rowLabel||""; lbl.placeholder=noteRowLabel()+", Study, Notes…";
+    ["night","recovery","day","free"].forEach(k=>{ document.getElementById("psR_"+k).value=r[k]||""; });
+    overlayPerson.classList.add("show");
+  }
+  document.getElementById("psShifts").addEventListener("click", e=>{
+    const b=e.target.closest("[data-shift]"); if(!b) return;
+    overlayPerson.classList.remove("show");
+    openEditor(b.dataset.shift);
+  });
+  document.getElementById("psAddShift").onclick=()=>{ overlayPerson.classList.remove("show"); addShift(personMid); };
+  document.getElementById("psSave").onclick=()=>{
+    if(!personMid) return;
+    const val=id=>document.getElementById(id).value.trim().slice(0,80);
+    put(Object.assign({}, rulesDoc(personMid)||{}, {
+      id:"rules:"+personMid, kind:"rules", mid:personMid,
+      rowLabel: cleanName(document.getElementById("psLabel").value),
+      night: val("psR_night"), recovery: val("psR_recovery"),
+      day: val("psR_day"), free: val("psR_free"),
+    }));
+    overlayPerson.classList.remove("show"); render();
+  };
+  document.getElementById("psClose").onclick=()=>overlayPerson.classList.remove("show");
 
   /* settings + welcome */
   const overlaySettings=document.getElementById("settings");
@@ -2225,6 +2309,20 @@ if(!HAS_DOM){
       const ok=!!s; if(s) drop(s.id); editingId=null; editingFresh=false; return ok;
     })());
     console.log("members: a gone person's tag reads as shared:", normWho("ghost")==="both" && whoLabel("ghost")===WHO.both);
+    console.log("members: day rules fill the note row from shifts:", (function(){
+      items["rules:p3"]={id:"rules:p3",kind:"rules",mid:"p3",rowLabel:"Study",night:"Rest before work",recovery:"Recovery day",day:"",free:"~2 hrs"};
+      items["shift:r1"]={id:"shift:r1",kind:"shift",who:"p3",date:"2026-08-03",start:"17:30",repeat:false};   // Mon night
+      const night=rowValueFor("p3", 0, "2026-08-03");
+      const rec=rowValueFor("p3", 1, "2026-08-04");
+      const free=rowValueFor("p3", 2, "2026-08-05");
+      items["info:0:furniture:p3"]={id:"info:0:furniture:p3",kind:"info",weekday:0,field:"furniture",mid:"p3",text:"Pinned today"};
+      const pinned=rowValueFor("p3", 0, "2026-08-03");
+      const lbl = noteRowLabelFor("p3")==="Study" && noteRowLabelFor("ben")==="Notes";
+      const sit = shiftSituation("p3","2026-08-03")==="night" && shiftSituation("p3","2026-08-04")==="recovery" && shiftSituation("p3","2026-08-05")==="free";
+      delete items["rules:p3"]; delete items["shift:r1"]; delete items["info:0:furniture:p3"];
+      return sit && lbl && night.auto && night.text==="Rest before work" && rec.text==="Recovery day"
+          && free.text==="~2 hrs" && pinned.auto===false && pinned.text==="Pinned today";
+    })());
     console.log("members: care chips follow their person:", (function(){
       items["care:t1"]={id:"care:t1",kind:"tpl",sec:"care",scope:0,text:"Old chip",icon:"i-paw",order:0};             // pre-members: no mid
       items["care:t2"]={id:"care:t2",kind:"tpl",sec:"care",scope:0,text:"Sam breakfast",icon:"i-child",order:1,mid:"p3"};

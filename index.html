@@ -248,6 +248,14 @@
   .dots span.on{background:#64748b}
   .headline.dim{opacity:.55; font-style:italic}
   .ph{opacity:.5; font-style:italic}
+  /* person sheet: shifts list + day rules */
+  .srow{display:flex; align-items:center; gap:6px; width:100%; text-align:left; background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-top:6px; cursor:pointer; font-size:.86rem}
+  .srow .sedit{margin-left:auto; color:var(--faint); font-size:.72rem}
+  .psgrp{font-size:.62rem; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); font-weight:700; margin-top:12px}
+  .pshint{font-size:.82rem; color:var(--faint); margin-top:6px}
+  .psrule{margin-top:10px}
+  .psrule label{display:flex; justify-content:space-between; align-items:baseline; font-size:.8rem; font-weight:600; margin-bottom:4px}
+  .psrule .psen{color:var(--faint); font-weight:500; font-size:.72rem}
   /* people editor rows (settings) */
   .prow{display:flex; gap:8px; align-items:center; margin-top:8px}
   .prow input{flex:1; min-width:0; margin:0}
@@ -446,6 +454,25 @@
     </div>
     <button class="btn sec" id="setClose">Close</button>
     <div class="meta" id="setMeta"></div>
+  </div>
+</div>
+
+<!-- Person: shifts & day rules (behind the scenes) -->
+<div class="overlay" id="personSheet">
+  <div class="sheet">
+    <h2><svg width="19" height="19"><use href="#i-gear"/></svg> <span id="psName">Person</span> — shifts &amp; day rules</h2>
+    <p>Work shifts — tap one to change or delete it:</p>
+    <div id="psShifts"></div>
+    <button class="lnk" id="psAddShift" style="margin-top:8px">+ Add a shift</button>
+    <p style="margin-top:18px">Their card's note row is called:</p>
+    <input type="text" id="psLabel" autocomplete="off" />
+    <p style="margin-top:18px">What fills that row, from their shifts — so it changes day to day. A note typed on the day itself always wins:</p>
+    <div class="psrule"><label>Works tonight <span class="psen">energy: lighter</span></label><input type="text" id="psR_night" placeholder="e.g. Rest before work" autocomplete="off" /></div>
+    <div class="psrule"><label>Day after a night shift <span class="psen">energy: lightest</span></label><input type="text" id="psR_recovery" placeholder="e.g. Recovery — nothing big" autocomplete="off" /></div>
+    <div class="psrule"><label>Day shift <span class="psen">energy: moderate</span></label><input type="text" id="psR_day" placeholder="e.g. 1 hr in the evening" autocomplete="off" /></div>
+    <div class="psrule"><label>No shift <span class="psen">energy: normal</span></label><input type="text" id="psR_free" placeholder="e.g. ~4 hrs (afternoon)" autocomplete="off" /></div>
+    <button class="btn" id="psSave">Save</button>
+    <button class="btn sec" id="psClose">Close</button>
   </div>
 </div>
 
