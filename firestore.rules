@@ -4,13 +4,23 @@ rules_version = '2';
 // Data is reachable only under households/<code>/… and only by someone who
 // knows the household code (the code is part of the path). No accounts; the
 // code is the key. Fine for a family planner — just keep the code private.
+//
+// LISTING the households collection is denied by omission: no rule matching
+// /households/{code} grants `list`, so nobody can ask the database for the
+// list of family codes. (Never add a nested {document=**} directly under
+// households/{code} — in rules v2 it matches zero segments and silently
+// re-grants list on the parent doc. Contents get their own match below.)
 service cloud.firestore {
   match /databases/{database}/documents {
+    // The household doc itself: full access if you know the code. No `list`.
     match /households/{code} {
+      allow get, create, update, delete: if true;
+    }
+    // Everything inside a household (items, inbox, push, sent, …) — the
+    // path requires the code, and this pattern can never match the
+    // households collection itself.
+    match /households/{code}/{collection}/{document=**} {
       allow read, write: if true;
-      match /{document=**} {
-        allow read, write: if true;
-      }
     }
   }
 }

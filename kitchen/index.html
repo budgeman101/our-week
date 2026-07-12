@@ -2711,20 +2711,33 @@ function fileToDownscaled(file, maxDim=1600, quality=0.82){
     img.src=url;
   });
 }
+/* Every AI request carries this household's code — the Worker only serves
+   known families, each with a monthly allowance (kitchen/receipt-worker.js).
+   Refusals come back as friendly messages; a low allowance warns after use. */
+async function askWorker(payload){
+  const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(Object.assign({household}, payload))});
+  const data=await res.json().catch(()=>null);
+  if(!res.ok){
+    const e=new Error((data&&data.error)||('worker '+res.status));
+    e.friendly=(res.status===403||res.status===429)&&!!(data&&data.error);
+    throw e;
+  }
+  const left=res.headers.get('x-uses-left');
+  if(left!==null&&Number(left)<=10) setTimeout(()=>toast(left+' AI scans left this month — they cost a little, so ask Ben if you need more'),1500);
+  return data;
+}
 async function scanReceipt(file){
   if(!file) return;
   if(!WORKER_URL){ toast('Add your Worker URL first — see RECEIPT-SETUP.md'); return; }
   toast('Reading your receipt…');
   try{
     const b64=await fileToDownscaled(file);
-    const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({image:b64, mediaType:'image/jpeg'})});
-    if(!res.ok) throw new Error('worker '+res.status);
-    const data=await res.json();
+    const data=await askWorker({image:b64, mediaType:'image/jpeg'});
     const items=Array.isArray(data)?data:(data&&Array.isArray(data.items)?data.items:[]);
     if(!items.length){ toast('No items found — try a clearer photo'); return; }
     openReceiptReview(items);
-  }catch(e){ console.error('receipt scan failed',e); toast('Couldn’t read that receipt — try again'); }
+  }catch(e){ console.error('receipt scan failed',e); toast(e.friendly?e.message:'Couldn’t read that receipt — try again'); }
 }
 // Read a photo of a handwritten/typed shopping list and drop it into the same
 // review screen as the receipt scan, but pointed at the shopping list. Same
@@ -2735,10 +2748,7 @@ async function scanHandwrittenList(file){
   toast('Reading your list…');
   try{
     const b64=await fileToDownscaled(file);
-    const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({mode:'list', image:b64, mediaType:'image/jpeg'})});
-    if(!res.ok) throw new Error('worker '+res.status);
-    const data=await res.json();
+    const data=await askWorker({mode:'list', image:b64, mediaType:'image/jpeg'});
     const items=Array.isArray(data)?data:(data&&Array.isArray(data.items)?data.items:[]);
     if(!items.length){ toast('No items found — try a clearer photo'); return; }
     openReceiptReview(items,{
@@ -2747,7 +2757,7 @@ async function scanHandwrittenList(file){
       sub:'Untick anything you don’t want, fix a name or aisle if needed, then add.',
       showStore:false
     });
-  }catch(e){ console.error('list scan failed',e); toast('Couldn’t read that list — try again'); }
+  }catch(e){ console.error('list scan failed',e); toast(e.friendly?e.message:'Couldn’t read that list — try again'); }
 }
 function catOptions(sel){
   return CATEGORIES.map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>${c.name}</option>`).join('');
@@ -2833,12 +2843,10 @@ async function importRecipeFromUrl(){
   if(!/^https?:\/\//i.test(url)){ toast('That doesn’t look like a web link'); return; }
   toast('Reading that recipe…');
   try{
-    const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({mode:'recipe', url})});
-    const data=await res.json().catch(()=>null);
-    if(!res.ok || !data || data.error) throw new Error((data&&data.error)||('worker '+res.status));
+    const data=await askWorker({mode:'recipe', url});
+    if(!data || data.error) throw new Error((data&&data.error)||'empty reply');
     applyImportedRecipe(data);
-  }catch(e){ console.error('recipe import failed',e); toast('Couldn’t read that link — try the photo option'); }
+  }catch(e){ console.error('recipe import failed',e); toast(e.friendly?e.message:'Couldn’t read that link — try the photo option'); }
 }
 async function importRecipeFromPhoto(file){
   if(!file) return;
@@ -2846,12 +2854,10 @@ async function importRecipeFromPhoto(file){
   toast('Reading that page…');
   try{
     const b64=await fileToDownscaled(file);
-    const res=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({mode:'recipe', image:b64, mediaType:'image/jpeg'})});
-    const data=await res.json().catch(()=>null);
-    if(!res.ok || !data || data.error) throw new Error((data&&data.error)||('worker '+res.status));
+    const data=await askWorker({mode:'recipe', image:b64, mediaType:'image/jpeg'});
+    if(!data || data.error) throw new Error((data&&data.error)||'empty reply');
     applyImportedRecipe(data);
-  }catch(e){ console.error('recipe photo import failed',e); toast('Couldn’t read that page — try a clearer photo'); }
+  }catch(e){ console.error('recipe photo import failed',e); toast(e.friendly?e.message:'Couldn’t read that page — try a clearer photo'); }
 }
 // Fill the (already open) meal modal from a recipe-like object {name,slot,ingredients,steps}.
 function fillMealWith(r){
