@@ -1,9 +1,11 @@
 /* Our Week — reminder sender.
  *
  * Runs on a schedule (GitHub Actions cron, see .github/workflows/reminders.yml),
- * reads the household's shifts + appointments from Firestore, works out which
+ * reads each household's shifts + appointments from Firestore, works out which
  * reminders are due right now, and pushes them to every phone that turned
- * reminders on. Free: no server to run, no card. Full setup in REMINDERS-SETUP.md.
+ * reminders on. Serves one household (HOUSEHOLD_CODE) or several
+ * (HOUSEHOLD_CODES, comma-separated). Free: no server to run, no card.
+ * Full setup in REMINDERS-SETUP.md.
  *
  * All the date logic lives in the pure `dueReminders()` function so it can be
  * unit-tested offline (node test.js) with no network.
@@ -13,7 +15,11 @@ const webpush = require("web-push");
 const CFG = {
   projectId: process.env.FIREBASE_PROJECT_ID,
   apiKey: process.env.FIREBASE_API_KEY,
-  household: process.env.HOUSEHOLD_CODE,
+  // One code (HOUSEHOLD_CODE) or a comma-separated list (HOUSEHOLD_CODES) —
+  // every listed household gets its own reminders. Codes are secrets: they
+  // are never printed in logs (this repo's Action logs are public).
+  households: String(process.env.HOUSEHOLD_CODES || process.env.HOUSEHOLD_CODE || "")
+    .split(/[,\s]+/).map((s) => s.trim()).filter(Boolean),
   tz: process.env.TIMEZONE || "America/Edmonton",
   vapidPublic: process.env.VAPID_PUBLIC_KEY,
   vapidPrivate: process.env.VAPID_PRIVATE_KEY,
@@ -126,11 +132,11 @@ function docToObj(doc) {
   for (const [k, v] of Object.entries(doc.fields || {})) o[k] = fval(v);
   return o;
 }
-async function listCollection(coll) {
+async function listCollection(hh, coll) {
   const out = [];
   let pageToken = "";
   do {
-    const url = `${BASE()}/households/${CFG.household}/${coll}?key=${CFG.apiKey}&pageSize=300` + (pageToken ? `&pageToken=${pageToken}` : "");
+    const url = `${BASE()}/households/${hh}/${coll}?key=${CFG.apiKey}&pageSize=300` + (pageToken ? `&pageToken=${pageToken}` : "");
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Firestore ${coll} read failed: ${res.status} ${await res.text()}`);
     const j = await res.json();
@@ -139,29 +145,25 @@ async function listCollection(coll) {
   } while (pageToken);
   return out;
 }
-async function markSent(key, whenMs) {
+async function markSent(hh, key, whenMs) {
   const id = key.replace(/[^A-Za-z0-9_.-]/g, "_");
-  const url = `${BASE()}/households/${CFG.household}/sent/${id}?key=${CFG.apiKey}`;
+  const url = `${BASE()}/households/${hh}/sent/${id}?key=${CFG.apiKey}`;
   await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fields: { ts: { integerValue: String(whenMs) } } }) });
 }
 
 /* ------------------------------ main ------------------------------ */
-async function main() {
-  const missing = ["projectId", "apiKey", "household", "vapidPublic", "vapidPrivate"].filter((k) => !CFG[k]);
-  if (missing.length) { console.error("Missing config:", missing.join(", ")); process.exit(1); }
-  webpush.setVapidDetails(CFG.vapidSubject, CFG.vapidPublic, CFG.vapidPrivate);
-
+async function runHousehold(hh, label) {
   const now = Date.now();
-  const [items, subs, sentDocs] = await Promise.all([listCollection("items"), listCollection("push"), listCollection("sent")]);
+  const [items, subs, sentDocs] = await Promise.all([listCollection(hh, "items"), listCollection(hh, "push"), listCollection(hh, "sent")]);
   const sentIds = new Set(sentDocs.map((d) => d._id));   // ids are the sanitised reminder keys
   const isSent = (key) => sentIds.has(key.replace(/[^A-Za-z0-9_.-]/g, "_"));
 
   const due = dueReminders(now, items, CFG);
   const fresh = due.filter((r) => !isSent(r.key));
 
-  console.log(`${items.length} items, ${subs.length} subscriptions, ${due.length} due, ${fresh.length} to send`);
-  if (!subs.length) { console.log("No phones subscribed yet — nothing to send."); return; }
+  console.log(`[${label}] ${items.length} items, ${subs.length} subscriptions, ${due.length} due, ${fresh.length} to send`);
+  if (!subs.length) { console.log(`[${label}] No phones subscribed yet — nothing to send.`); return; }
 
   for (const r of fresh) {
     const payload = JSON.stringify({ title: r.title, body: r.body, tag: r.key, url: "./" });
@@ -172,13 +174,29 @@ async function main() {
       catch (e) {
         if (e.statusCode === 404 || e.statusCode === 410) {
           // subscription gone (app deleted / permission revoked) — clean it up
-          await fetch(`${BASE()}/households/${CFG.household}/push/${s._id}?key=${CFG.apiKey}`, { method: "DELETE" }).catch(() => {});
-        } else console.error("push failed:", e.statusCode || e.message);
+          await fetch(`${BASE()}/households/${hh}/push/${s._id}?key=${CFG.apiKey}`, { method: "DELETE" }).catch(() => {});
+        } else console.error(`[${label}] push failed:`, e.statusCode || e.message);
       }
     }
-    await markSent(r.key, now);
-    console.log(`sent "${r.title}" to ${ok}/${subs.length} phones`);
+    await markSent(hh, r.key, now);
+    console.log(`[${label}] sent "${r.title}" to ${ok}/${subs.length} phones`);
   }
+}
+async function main() {
+  const missing = ["projectId", "apiKey", "vapidPublic", "vapidPrivate"].filter((k) => !CFG[k]);
+  if (!CFG.households.length) missing.push("HOUSEHOLD_CODES (or HOUSEHOLD_CODE)");
+  if (missing.length) { console.error("Missing config:", missing.join(", ")); process.exit(1); }
+  webpush.setVapidDetails(CFG.vapidSubject, CFG.vapidPublic, CFG.vapidPrivate);
+
+  // Each family gets its own run; one family's hiccup never blocks another's
+  // reminders. Codes stay out of the logs — households are numbered instead.
+  let failed = 0;
+  for (let i = 0; i < CFG.households.length; i++) {
+    const label = `household ${i + 1}/${CFG.households.length}`;
+    try { await runHousehold(CFG.households[i], label); }
+    catch (e) { failed++; console.error(`[${label}]`, e.message || e); }
+  }
+  if (failed) process.exit(1);   // red run = something needs a look
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });

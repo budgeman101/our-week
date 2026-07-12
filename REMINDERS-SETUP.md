@@ -40,7 +40,8 @@ New repository secret**, and add these (values are in
 | `FIREBASE_PROJECT_ID` | your `projectId` from `firebaseConfig` in `app.js` |
 | `FIREBASE_API_KEY`  | your `apiKey` from `firebaseConfig` in `app.js` |
 | `HOUSEHOLD_CODE`    | the exact code you use in the app (⚙ Settings) |
-| `TIMEZONE`          | your timezone, e.g. `America/Edmonton` |
+| `HOUSEHOLD_CODES`   | *(optional)* several codes, comma-separated — every listed household gets its own reminders. If set, this wins over `HOUSEHOLD_CODE`. |
+| `TIMEZONE`          | your timezone, e.g. `America/Edmonton` (shared by every listed household) |
 
 The Firestore rules from `SETUP-GUIDE.md` Part E already allow this — no rules
 change needed.

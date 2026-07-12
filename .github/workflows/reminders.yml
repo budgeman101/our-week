@@ -29,7 +29,10 @@ jobs:
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_API_KEY:    ${{ secrets.FIREBASE_API_KEY }}
+          # One code, or several families comma-separated (HOUSEHOLD_CODES
+          # wins if both are set — HOUSEHOLD_CODE stays for back-compat)
           HOUSEHOLD_CODE:      ${{ secrets.HOUSEHOLD_CODE }}
+          HOUSEHOLD_CODES:     ${{ secrets.HOUSEHOLD_CODES }}
           TIMEZONE:            ${{ secrets.TIMEZONE }}
           VAPID_PUBLIC_KEY:    ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY:   ${{ secrets.VAPID_PRIVATE_KEY }}
