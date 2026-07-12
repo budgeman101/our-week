@@ -910,21 +910,28 @@ function isNightShift(s){
   return false;
 }
 function prevISO(iso){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()-1); return isoOf(d); }
-/* one person's energy for the day, from their own shifts */
+/* one person's energy for the day, from their own shifts: recovering
+   from one, working a night or a heavy day (all day shifts added up),
+   or preparing for an early start tomorrow */
 function deriveEnergyFor(who, iso){
   const today=shiftsFor(iso, who);
   const workedLastNight=shiftsFor(prevISO(iso), who).some(isNightShift);
-  if(!today.length && !workedLastNight) return "";
+  const early=earlyStartTomorrow(who, iso);
+  if(!today.length && !workedLastNight && !early) return "";
+  const T=longDayFor(who);
+  const dayH=dayShiftHoursFor(who, iso);
   const bits=[];
   if(workedLastNight) bits.push("Off a night shift");
   today.forEach(s=>{
     const t=s.start ? " ("+fmtTime(s.start)+(s.end?"–"+fmtTime(s.end):"")+")" : "";
-    bits.push((isNightShift(s)?"works tonight":isLongShift(s)?"long shift":"day shift")+t);
+    bits.push((isNightShift(s)?"works tonight":shiftHours(s)>=T?"long shift":"day shift")+t);
   });
+  if(early) bits.push("early start tomorrow ("+fmtTime(early.start)+")");
   let sentence=bits.join(" + "); sentence=sentence.charAt(0).toUpperCase()+sentence.slice(1);
   let level="moderate";
   if(workedLastNight && today.length) level="lightest";
-  else if(workedLastNight || today.some(s=>isNightShift(s)||isLongShift(s))) level="light";
+  else if(workedLastNight || today.some(isNightShift) || dayH>=T) level="light";
+  else if(early) level="early night";
   return sentence+" — "+level;
 }
 /* the household's energy line (print + tests): all shifts together */
@@ -950,12 +957,12 @@ function energyInfo(w, iso){
   const info=items["info:"+w+":energy"];
   return { text: info?info.text:"", derived:false };
 }
-/* the heads-up shown on OTHER people's cards — only when their day is
-   genuinely light (works tonight, or recovering after one). A normal
-   or day-shift day says nothing; you know your own day. */
+/* the heads-up shown on OTHER people's cards — recovering from a shift,
+   working a night or heavy day, or preparing for an early start. A
+   plain workday or free day says nothing; you know your own day. */
 function energyHeadsUp(mid, iso){
   const d=deriveEnergyFor(mid, iso);
-  return (d && /— light(est)?$/.test(d)) ? d : null;
+  return (d && /— (light(est)?|early night)$/.test(d)) ? d : null;
 }
 /* which of the four rule situations this person is in that day */
 function shiftSituation(mid, iso){
@@ -972,12 +979,26 @@ function shiftHours(s){
   if(en<=st) en+=24*60;                    // crosses midnight
   return (en-st)/60;
 }
-/* a LONG day shift (9+ hrs — think delivery routes) drains like a night
-   shift drains: the day reads light and the row says rest, even though
-   the hours are daytime. Nights stay the only thing that earns a
+/* A HEAVY work day drains like a night shift drains: the day reads
+   light and the row says rest, even though the hours are daytime.
+   All of a day's shifts ADD UP to reach the bar (split delivery blocks
+   count together); the bar itself is per-person tunable in their
+   Shifts & rules sheet (rules.longDay), default 8.5 h so a standard
+   8-hour day stays normal. Nights stay the only thing that earns a
    recovery day after (that's a sleep-cycle thing). */
-const LONG_SHIFT_H = 9;
+const LONG_SHIFT_H = 8.5;
+function longDayFor(mid){ const r=rulesDoc(mid); return (r && typeof r.longDay==="number" && r.longDay>0) ? r.longDay : LONG_SHIFT_H; }
+function dayShiftHoursFor(mid, iso){ return shiftsFor(iso, mid).filter(s=>!isNightShift(s)).reduce((n,s)=>n+shiftHours(s),0); }
 function isLongShift(s){ return !isNightShift(s) && shiftHours(s)>=LONG_SHIFT_H; }
+/* preparing for an early start: first shift TOMORROW beginning before
+   8 am shows on today's card, so the evening can wind down early */
+const EARLY_START_MIN = 8*60;
+function nextISO(iso){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+1); return isoOf(d); }
+function earlyStartTomorrow(mid, iso){
+  return shiftsFor(nextISO(iso), mid)
+    .filter(s=>s.start && toMin(s.start)<EARLY_START_MIN)
+    .sort((a,b)=>toMin(a.start)-toMin(b.start))[0] || null;
+}
 /* the calculated row text for the day: hours handed out from the
    person's free-day number, scaled by how big the shift is */
 function autoRowFor(mid, iso){
@@ -991,7 +1012,7 @@ function autoRowFor(mid, iso){
   if(sit==="night")    return { text:"Rest before work", auto:true };
   if(sit==="day"){
     const L=shiftsFor(iso, mid).reduce((n,s)=>n+shiftHours(s),0);
-    if(L>=LONG_SHIFT_H) return { text:"Rest — long day", auto:true };
+    if(L>=longDayFor(mid)) return { text:"Rest — long day", auto:true };
     return { text: L<5 ? hrs(Math.max(1, Math.round(F/2))) : hrs(1)+" (evening)", auto:true };
   }
   return { text:hrs(F), auto:true };
@@ -1888,12 +1909,15 @@ if(HAS_DOM){
     const F=(typeof r.freeHours==="number" && r.freeHours>0) ? r.freeHours : "";
     const fEl=document.getElementById("psFree");
     fEl.value=F; fEl.placeholder="4";
+    const LD=(typeof r.longDay==="number" && r.longDay>0) ? r.longDay : "";
+    const lEl=document.getElementById("psLong");
+    lEl.value=LD; lEl.placeholder=String(LONG_SHIFT_H);
     ["night","recovery","day","free"].forEach(k=>{ document.getElementById("psR_"+k).value=r[k]||""; });
     // the placeholders ARE the calculation — the behind-the-scenes view
-    const Fv=F||4;
+    const Fv=F||4, LDv=LD||LONG_SHIFT_H;
     document.getElementById("psR_night").placeholder="auto: Rest before work";
     document.getElementById("psR_recovery").placeholder="auto: Rest — recovery";
-    document.getElementById("psR_day").placeholder="auto: ~"+Math.max(1,Math.round(Fv/2))+" hrs short · ~1 hr full · rest 9+";
+    document.getElementById("psR_day").placeholder="auto: ~"+Math.max(1,Math.round(Fv/2))+" hrs short · ~1 hr full · rest "+LDv+"+";
     document.getElementById("psR_free").placeholder="auto: ~"+Fv+" hrs";
     overlayPerson.classList.add("show");
   }
@@ -1914,6 +1938,8 @@ if(HAS_DOM){
     });
     const fh=parseFloat(document.getElementById("psFree").value);
     if(fh>0) doc.freeHours=fh; else delete doc.freeHours;
+    const ld=parseFloat(document.getElementById("psLong").value);
+    if(ld>0) doc.longDay=ld; else delete doc.longDay;
     put(doc);
     overlayPerson.classList.remove("show"); render();
   };
@@ -2377,8 +2403,8 @@ if(!HAS_DOM){
       const free=rowValueFor("p3", 2, "2026-08-05");                                     // no shift
       items["shift:c1"]={id:"shift:c1",kind:"shift",who:"p3",date:"2026-08-05",start:"09:00",end:"12:00",repeat:false};
       const short=rowValueFor("p3", 2, "2026-08-05");                                    // 3 h day shift
-      items["shift:c1"].end="17:30";
-      const long=rowValueFor("p3", 2, "2026-08-05");                                     // 8.5 h day shift
+      items["shift:c1"].end="16:30";
+      const long=rowValueFor("p3", 2, "2026-08-05");                                     // 7.5 h day shift — full but not heavy
       items["shift:c1"]={id:"shift:c1",kind:"shift",who:"p3",date:"2026-08-05",start:"17:30",end:"",repeat:false};
       const night=rowValueFor("p3", 2, "2026-08-05");                                    // night shift
       const rec=rowValueFor("p3", 3, "2026-08-06");                                      // day after
@@ -2402,6 +2428,33 @@ if(!HAS_DOM){
       delete items["shift:d1"]; delete items["rules:p3"];
       return /long shift/i.test(en) && /— light$/.test(en) && !!hu
           && row.text==="Rest — long day" && noRecovery && lateEnd;
+    })());
+    console.log("members: split blocks ADD UP to a heavy day:", (function(){
+      items["rules:p3"]={id:"rules:p3",kind:"rules",mid:"p3",freeHours:4};
+      items["shift:b1"]={id:"shift:b1",kind:"shift",who:"p3",date:"2026-08-05",start:"08:00",end:"12:30",repeat:false};  // 4.5 h
+      items["shift:b2"]={id:"shift:b2",kind:"shift",who:"p3",date:"2026-08-05",start:"13:30",end:"18:00",repeat:false};  // + 4.5 h = 9 h
+      const both=deriveEnergyFor("p3","2026-08-05");
+      const row=rowValueFor("p3", 2, "2026-08-05");
+      delete items["shift:b2"];
+      const single=deriveEnergyFor("p3","2026-08-05");                                   // 4.5 h alone → normal
+      delete items["shift:b1"]; delete items["rules:p3"];
+      return /— light$/.test(both) && row.text==="Rest — long day" && /— moderate$/.test(single);
+    })());
+    console.log("members: early start tomorrow shows tonight:", (function(){
+      items["shift:e9"]={id:"shift:e9",kind:"shift",who:"p3",date:"2026-08-06",start:"06:40",end:"15:10",repeat:false};
+      const hu=energyHeadsUp("p3","2026-08-05");                 // the evening before
+      const after=energyHeadsUp("p3","2026-08-07");              // day AFTER an early day shift: nothing
+      delete items["shift:e9"];
+      return /early start tomorrow \(6:40 AM\) — early night$/i.test(hu||"") && after===null;
+    })());
+    console.log("members: the heavy-day bar is tunable per person:", (function(){
+      items["rules:p3"]={id:"rules:p3",kind:"rules",mid:"p3",longDay:10};
+      items["shift:t1"]={id:"shift:t1",kind:"shift",who:"p3",date:"2026-08-05",start:"08:00",end:"17:00",repeat:false};  // 9 h
+      const relaxed=deriveEnergyFor("p3","2026-08-05");
+      items["rules:p3"].longDay=8;
+      const strict=deriveEnergyFor("p3","2026-08-05");
+      delete items["rules:p3"]; delete items["shift:t1"];
+      return /— moderate$/.test(relaxed) && /— light$/.test(strict);
     })());
     console.log("members: care chips follow their person:", (function(){
       items["care:t1"]={id:"care:t1",kind:"tpl",sec:"care",scope:0,text:"Old chip",icon:"i-paw",order:0};             // pre-members: no mid
