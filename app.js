@@ -40,6 +40,40 @@ const DAY_FULL  = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"
 const DAY_SHORT = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const CARE_ICONS = ["i-paw","i-child","i-leaf","i-heart","i-list"];
 
+/* ---------------- household display names (friend-ready) ---------- *
+ *  Internal ids stay "ben"/"lindsay" everywhere (so nothing migrates);
+ *  a per-household meta:names doc maps them to what's shown on screen.
+ *  No doc = the original defaults, so the original household is
+ *  pixel-identical. Names are cleaned of <, > and & at save AND read,
+ *  which keeps every `${WHO[...]}` template injection safe. */
+const WHO_DEFAULT = { ben:"Ben", lindsay:"Lindsay" };
+function cleanName(s){ return String(s||"").replace(/[<>&]/g,"").trim().slice(0,20); }
+function namesDoc(){ return items["meta:names"]; }
+function applyNames(){
+  const n = namesDoc()||{};
+  const preSetup = !household && !me;   // welcome backdrop: show no real names
+  WHO.ben = cleanName(n.ben) || (preSetup ? "Person 1" : WHO_DEFAULT.ben);
+  WHO.lindsay = cleanName(n.lindsay) || (preSetup ? "Person 2" : WHO_DEFAULT.lindsay);
+  if(HAS_DOM){
+    const set=(sel,txt)=>document.querySelectorAll(sel).forEach(el=>{ el.textContent=txt; });
+    set("#legendBen", WHO.ben); set("#legendLindsay", WHO.lindsay);
+    set('#setIdRow [data-id="ben"]', WHO.ben); set('#setIdRow [data-id="lindsay"]', WHO.lindsay);
+  }
+}
+/* the partner card's free note row: "Furniture" for the original
+   household, "Notes" for households created via the new welcome setup */
+function noteRowLabel(){ const n=namesDoc(); return (n && n.noteLabel) || "Furniture"; }
+function escRe(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+/* an explicit name in the text beats keyword guessing — keywords are
+   this household's habits, a name is a direct instruction */
+function whoFromName(s){
+  for(const w of ["ben","lindsay"]){
+    const nm=String(WHO[w]||"").trim().toLowerCase();
+    if(nm && new RegExp("\\b"+escRe(nm)+"\\b").test(s)) return w;
+  }
+  return null;
+}
+
 /* ================= master List: areas + auto-sorting =============== *
  *  Tasks dumped in (typed, Siri inbox, or imported) sort themselves
  *  by who and area — same shape as the paper "Household To-Do List".
@@ -84,14 +118,17 @@ function classify(text){
   const s=String(text).toLowerCase();
   let area="other";
   for(const r of AREA_RULES){ if(r[1].test(s)){ area=r[0]; break; } }
-  let who=null;
-  for(const r of WHO_RULES){ if(r[1].test(s)){ who=r[0]; break; } }
+  let who = WHO_RULES[0][1].test(s) ? "both" : whoFromName(s);
+  if(!who) for(const r of WHO_RULES){ if(r[1].test(s)){ who=r[0]; break; } }
   return { area, who: who || AREA_WHO_DEFAULT[area] || "both" };
 }
 // who for a project step: only override the project's person when the step
 // wording strongly points at someone, else inherit the project.
 function classifyWho(text, fallback){
   const s=String(text).toLowerCase();
+  if(WHO_RULES[0][1].test(s)) return "both";
+  const byName=whoFromName(s);
+  if(byName) return byName;
   for(const r of WHO_RULES){ if(r[1].test(s)) return r[0]; }
   return fallback || "both";
 }
@@ -260,7 +297,7 @@ function connect(){
   if(unsub){ try{ unsub(); }catch(e){} unsub=null; }
   if(inboxUnsub){ try{ inboxUnsub(); }catch(e){} inboxUnsub=null; }
   colRef=null;
-  loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); autoRoll(); migrateRemoveJohny(); render();
+  loadLocal(); runSeeders(); render();
   if(CONFIGURED && household && typeof firebase!=="undefined"){
     try{
       if(!fbStarted){ firebase.initializeApp(firebaseConfig); db=firebase.firestore();
@@ -268,7 +305,7 @@ function connect(){
       colRef = db.collection("households").doc(household).collection("items");
       unsub = colRef.onSnapshot(snap=>{
         const next={}; snap.forEach(doc=> next[doc.id]=doc.data());
-        items=next; seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); autoRoll(); migrateRemoveJohny(); saveLocal(); render(); setStatus(true);
+        items=next; runSeeders(); saveLocal(); render(); setStatus(true);
       }, ()=> setStatus(false));
       drainInbox();
     }catch(e){ setStatus(false); }
@@ -399,6 +436,59 @@ function seedShiftsIfNeeded(force){
   REGULAR_SHIFTS.forEach(s=> seedDoc(s.id,
     { kind:"shift", label:"", date:s.date, start:s.start, end:"", repeat:true }, force));
   setMeta(sentinel); saveLocal();
+}
+
+/* -------- neutral starter for brand-new households (friend-ready) -- *
+ *  The welcome card saves a pending setup (the two names + which one
+ *  this phone is) locally. On the first look at a household that turns
+ *  out to be EMPTY, we write the names and a small generic starter
+ *  instead of the original family's plan, and set the legacy sentinels
+ *  so the old seeders never fire for it. A household that already has
+ *  data is never touched — joining phones just adopt its names. */
+const NEUTRAL_CLEAN = ["Kitchen — counters + floor","Bathrooms","Floors — vacuum or mop",
+  "Bedrooms — tidy + fresh sheets","Living room","Catch-up + outside jobs","Rest day — nothing scheduled"];
+const NEUTRAL_ROUTINE = {
+  morning:[ {id:"m0", text:"Make the beds", who:"both"} ],
+  night:[ {id:"n0", text:"Tidy the kitchen", who:"both"} ],
+  each:[],
+};
+function pendingSetup(){ try{ return JSON.parse(localStorage.getItem("ow-pending-setup")||"null"); }catch(e){ return null; } }
+function clearPendingSetup(){ localStorage.removeItem("ow-pending-setup"); }
+/* phones can type the two names in either order — identity follows the
+   NAME the person tapped, not the slot it was typed into */
+function adoptIdentity(p){
+  const n=namesDoc(); if(!n || !p || !p.picked) return;
+  const pick=String(p.picked).trim().toLowerCase();
+  const id = cleanName(n.ben).toLowerCase()===pick ? "ben"
+           : cleanName(n.lindsay).toLowerCase()===pick ? "lindsay" : null;
+  if(id && me!==id){ me=id; pendWho=me; localStorage.setItem("ow-me", me); }
+}
+function seedNeutralIfNeeded(){
+  const p=pendingSetup(); if(!p) return;
+  const settled = colRef || !CONFIGURED;   // writes reach the cloud (or there is no cloud)
+  if(namesDoc()){ adoptIdentity(p); if(settled) clearPendingSetup(); return; }
+  if(Object.values(items).some(t=>t && t.kind && t.kind!=="meta")){
+    if(settled) clearPendingSetup();       // existing household — never write over it
+    return;
+  }
+  put({ id:"meta:names", kind:"names", ben:cleanName(p.ben)||"Person 1",
+        lindsay:cleanName(p.lindsay)||"Person 2", noteLabel:"Notes" });
+  NEUTRAL_CLEAN.forEach((text,w)=> seedDoc("clean:"+w,
+    {kind:"tpl", sec:"clean", scope:w, check:true, who:"both", text, order:0}));
+  ["morning","night","each"].forEach(sec=> NEUTRAL_ROUTINE[sec].forEach((r,i)=> seedDoc("tpl:"+sec+":"+r.id,
+    {kind:"tpl", sec, scope:"daily", check:true, who:r.who, text:r.text, order:i})));
+  setMeta("meta:seed:"+SEED_VERSION); setMeta("meta:tpl:"+TPL_VERSION); setMeta("meta:shiftseed:"+SHIFT_SEED_VERSION);
+  applyNames(); adoptIdentity(p);
+  if(settled) clearPendingSetup();
+  saveLocal();
+}
+/* one gate for every (re)connect + snapshot: new-style households seed
+   neutral, everything else keeps the original behaviour (sentinels make
+   re-runs no-ops either way) */
+function runSeeders(){
+  if(pendingSetup() || namesDoc()) seedNeutralIfNeeded();
+  else { seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); }
+  autoRoll(); migrateRemoveJohny();
 }
 function autoRoll(){
   const rk = realWeekKey(); let n=0;
@@ -743,7 +833,7 @@ function comingUp(){
 }
 
 /* ============================== editor ============================ */
-function labelForInfo(f){ return f==="headline"?"Edit Lindsay's day":(f==="energy"?"Edit energy":(f==="furniture"?"Edit furniture":"Edit")); }
+function labelForInfo(f){ return f==="headline"?"Edit "+WHO.lindsay+"'s day":(f==="energy"?"Edit energy":(f==="furniture"?"Edit "+noteRowLabel().toLowerCase():"Edit")); }
 function updateEdWho(){ const b=document.getElementById("edWhoBtn"); b.className="who cyc "+edWho; b.textContent=WHO[edWho]; }
 function updateEdIcon(){ document.getElementById("edIconBtn").innerHTML='<svg><use href="#'+edIcon+'"/></svg>'; }
 function show(id, on){ document.getElementById(id).style.display = on?"":"none"; }
@@ -1020,6 +1110,7 @@ function dayProgress(){
 function refreshProgress(){ const pr=dayProgress(); const el=document.querySelector(".dayhead .prog"); if(el) el.textContent=pr.done+"/"+pr.total+" done"; }
 
 function render(){
+  applyNames();
   if(!HAS_DOM) return;
   updateTabs();
   show("viewWeek", view==="week");
@@ -1081,7 +1172,7 @@ function renderWeek(){
     </div>
 
     <div class="card lindsay">
-      <div class="ctitle pink"><svg><use href="#i-heart"/></svg>With Lindsay</div>
+      <div class="ctitle pink"><svg><use href="#i-heart"/></svg>With ${WHO.lindsay}</div>
       <p class="headline tap" data-id="info:${selDay}:headline" data-act="edititem">${esc(infoText(selDay,"headline"))}</p>
       <div class="shiftrow">
         <div class="lbl">Shifts</div>
@@ -1092,7 +1183,7 @@ function renderWeek(){
       </div>
       <div class="metarow">
         ${energyMetaHTML(selDay, selDayISO())}
-        <div class="meta tap" data-id="info:${selDay}:furniture" data-act="edititem"><div class="lbl">Furniture</div><div class="val">${esc(infoText(selDay,"furniture"))}</div></div>
+        <div class="meta tap" data-id="info:${selDay}:furniture" data-act="edititem"><div class="lbl">${noteRowLabel()}</div><div class="val">${esc(infoText(selDay,"furniture"))}</div></div>
       </div>
       <div class="carechips">
         ${care.map(careChip).join("")}
@@ -1134,7 +1225,7 @@ function renderWeek(){
 /* master List — the digital "Household To-Do List": who, then area */
 function renderList(){
   const all=masterTodos();
-  const secs=[["both","Both of Us"],["ben","Ben"],["lindsay","Lindsay"]].map(function(g){
+  const secs=[["both","Both of Us"],["ben",WHO.ben],["lindsay",WHO.lindsay]].map(function(g){
     const w=g[0], label=g[1];
     const mine=all.filter(t=>(t.who||"both")===w);
     if(!mine.length) return "";
@@ -1256,7 +1347,7 @@ function renderNotes(){
       <div class="nstatus">${status}</div>
     </div>`;
   }).join("");
-  if(!notes.length) html = `<div class="emptybig"><svg width="34" height="34"><use href="#i-note"/></svg><p>No notes yet.<br>Leave one for ${me==="ben"?"Lindsay":(me==="lindsay"?"Ben":"each other")}.</p></div>`;
+  if(!notes.length) html = `<div class="emptybig"><svg width="34" height="34"><use href="#i-note"/></svg><p>No notes yet.<br>Leave one for ${me==="ben"?WHO.lindsay:(me==="lindsay"?WHO.ben:"each other")}.</p></div>`;
   document.getElementById("notesBody").innerHTML = html;
 }
 
@@ -1289,9 +1380,9 @@ function printWeekHTML(){
     const appts=apptsForDate(iso);
     h += `<div class="pday"><div class="pdayname">${DAY_FULL[i]}, ${d.toLocaleDateString("en-US",{month:"long",day:"numeric"})}</div>`;
     const shifts=shiftsForDate(iso);
-    h += `<div class="pmeta"><b>Lindsay:</b> ${esc(infoText(i,"headline"))}</div>`;
+    h += `<div class="pmeta"><b>${WHO.lindsay}:</b> ${esc(infoText(i,"headline"))}</div>`;
     if(shifts.length) h += `<div class="pmeta2">Shifts: ${shifts.map(s=>(s.start?fmtTime(s.start):"TBD")+(s.end?"–"+fmtTime(s.end):"")+(s.label?" "+s.label:"")).join(" · ")}</div>`;
-    h += `<div class="pmeta2">Energy: ${esc(energyInfo(i, iso).text)} · Furniture: ${esc(infoText(i,"furniture"))}</div>`;
+    h += `<div class="pmeta2">Energy: ${esc(energyInfo(i, iso).text)} · ${noteRowLabel()}: ${esc(infoText(i,"furniture"))}</div>`;
     if(care.length) h += `<div class="pmeta2">${care.map(c=>esc(c.text)).join(" · ")}</div>`;
     if(appts.length){
       h += `<div class="psec">Appointments</div>`;
@@ -1309,7 +1400,7 @@ function printWeekHTML(){
   h += `<div class="psec">Every morning</div>` + tplList("morning","daily").map(r=>pItem(r.text,r.who)).join("");
   h += `<div class="psec">Every night</div>` + tplList("night","daily").map(r=>pItem(r.text,r.who)).join("");
   h += `<div class="psec">Each day</div>` + tplList("each","daily").map(r=>pItem(r.text,r.who)).join("");
-  h += `<div class="pfoot">Bold = needs both Ben &amp; Lindsay.</div></div>`;
+  h += `<div class="pfoot">Bold = needs both ${WHO.ben} &amp; ${WHO.lindsay}.</div></div>`;
   return h;
 }
 function doPrint(){
@@ -1445,6 +1536,15 @@ if(HAS_DOM){
     const b=e.target.closest("[data-id]"); if(!b) return;
     welcomeId=b.dataset.id; paintIdPick("#welcomeId", welcomeId);
   });
+  /* the who-am-I buttons mirror whatever names are being typed */
+  function paintWelcomeNames(){
+    const a=cleanName(document.getElementById("welcomeNameA").value)||"Person 1";
+    const b=cleanName(document.getElementById("welcomeNameB").value)||"Person 2";
+    const qa=document.querySelector('#welcomeId [data-id="ben"]');
+    const qb=document.querySelector('#welcomeId [data-id="lindsay"]');
+    if(qa) qa.textContent=a;
+    if(qb) qb.textContent=b;
+  }
   document.getElementById("setIdRow").addEventListener("click", e=>{
     const b=e.target.closest("[data-id]"); if(!b) return;
     me=b.dataset.id; localStorage.setItem("ow-me", me); pendWho=me; paintIdPick("#setIdRow", me);
@@ -1455,6 +1555,10 @@ if(HAS_DOM){
   const overlayWelcome=document.getElementById("welcome");
   function openSettings(){
     document.getElementById("setCode").value=household;
+    document.getElementById("setNameA").value=WHO.ben;
+    document.getElementById("setNameB").value=WHO.lindsay;
+    // starter to-dos belong to the original household only
+    document.getElementById("setReseed").style.display = namesDoc() ? "none" : "";
     paintIdPick("#setIdRow", me);
     const st=document.getElementById("setStatus");
     const dot='<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="currentColor"/></svg>';
@@ -1494,7 +1598,14 @@ if(HAS_DOM){
   document.getElementById("printBtn").onclick=doPrint;
   document.getElementById("setClose").onclick=()=>overlaySettings.classList.remove("show");
   document.getElementById("setSave").onclick=()=>{
-    const v=document.getElementById("setCode").value.trim(); if(!v) return;
+    // Renamed someone? Save the names to this household (any phone can).
+    const na=cleanName(document.getElementById("setNameA").value);
+    const nb=cleanName(document.getElementById("setNameB").value);
+    if(na && nb && (na!==WHO.ben || nb!==WHO.lindsay)){
+      put(Object.assign({}, namesDoc()||{}, { id:"meta:names", kind:"names", ben:na, lindsay:nb }));
+      applyNames();
+    }
+    const v=document.getElementById("setCode").value.trim(); if(!v){ render(); return; }
     // Changing to a new code? Keep a copy of the plan so it can move along.
     const prevCode=household;
     const prev = (prevCode && v!==prevCode) ? Object.assign({}, items) : null;
@@ -1533,18 +1644,29 @@ if(HAS_DOM){
   document.getElementById("welcomeStart").onclick=()=>{
     const v=document.getElementById("welcomeCode").value.trim();
     if(!v){ document.getElementById("welcomeCode").focus(); return; }
+    const na=cleanName(document.getElementById("welcomeNameA").value);
+    const nb=cleanName(document.getElementById("welcomeNameB").value);
+    if(!na){ document.getElementById("welcomeNameA").focus(); return; }
+    if(!nb){ document.getElementById("welcomeNameB").focus(); return; }
     if(!welcomeId){ document.getElementById("welcomeId").classList.add("shake"); setTimeout(()=>document.getElementById("welcomeId").classList.remove("shake"),400); return; }
     household=v; me=welcomeId; pendWho=me;
     localStorage.setItem("ow-household",household); localStorage.setItem("ow-me", me);
+    // names + picked identity travel to the first look at this household;
+    // they only take effect if the code turns out to be brand new
+    localStorage.setItem("ow-pending-setup", JSON.stringify({ ben:na, lindsay:nb, picked: welcomeId==="ben"?na:nb }));
     overlayWelcome.classList.remove("show"); connect();
   };
 
   /* boot */
   if(!household || !me){
-    document.getElementById("welcomeCode").value = household || "ben-lindsay-2026-"+Math.random().toString(36).slice(2,6);
+    document.getElementById("welcomeCode").value = household || "our-home-"+Math.random().toString(36).slice(2,8);
     welcomeId = me || "";
     paintIdPick("#welcomeId", welcomeId);
-    loadLocal(); seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); migrateRemoveJohny(); render();
+    ["welcomeNameA","welcomeNameB"].forEach(id=> document.getElementById(id).addEventListener("input", paintWelcomeNames));
+    paintWelcomeNames();
+    // NOTE: no seeding before a code is chosen — the backdrop behind the
+    // welcome card stays generic, so the public URL shows no family's plan.
+    loadLocal(); render();
     overlayWelcome.classList.add("show");
   } else {
     pendWho=me; connect();
@@ -1743,6 +1865,42 @@ if(!HAS_DOM){
     const u=unplanWeek();
     console.log("un-plan moved only the auto one:", u===1 && !items["c:auto"].weekKey && items["c:mine"].weekKey==="2026-08-03");
     delete items["c:mine"]; delete items["c:auto"];
+  })();
+  /* friend-ready: neutral households, dynamic names, name-aware classify */
+  (function(){
+    // a brand-new code set up through the welcome card seeds neutral
+    items={};
+    localStorage.setItem("ow-pending-setup", JSON.stringify({ben:"Alex", lindsay:"Jamie", picked:"Jamie"}));
+    runSeeders();
+    const vals=()=>Object.values(items);
+    console.log("neutral: no starter todos:", vals().filter(t=>t.kind==="todo").length===0);
+    console.log("neutral: no shifts:", vals().filter(t=>t.kind==="shift").length===0);
+    console.log("neutral: no partner-day template:", vals().filter(t=>t.kind==="info").length===0);
+    console.log("neutral: cleaning rota seeded:", vals().filter(t=>t.kind==="tpl"&&t.sec==="clean").length===7);
+    console.log("neutral: names applied:", WHO.ben==="Alex" && WHO.lindsay==="Jamie");
+    console.log("neutral: picked name adopted as identity:", me==="lindsay");
+    // node has Firebase keys but no SDK, so writes can't be confirmed — the
+    // pending setup must survive for the next (live) look at the household
+    console.log("neutral: pending kept until cloud confirms:", pendingSetup()!==null);
+    // sentinels keep the original seeders out of a neutral household
+    seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded();
+    console.log("neutral: legacy seeders stay out:", vals().filter(t=>t.kind==="info").length===0 && vals().filter(t=>t.kind==="shift").length===0);
+    // explicit names win over keyword guessing; "both" words still win overall
+    console.log("classify: name beats keywords:", classify("fold laundry with Alex").who==="ben");
+    console.log("classify: both still wins:", classify("family walk with Alex").who==="both");
+    console.log("classify: names are per-household:", classify("fold laundry with Maria").who==="lindsay");
+    // names are cleaned so template injections stay safe
+    items["meta:names"]={id:"meta:names",kind:"names",ben:"<img src=x>Evil",lindsay:"O&K"};
+    applyNames();
+    console.log("names sanitized:", WHO.ben==="img src=xEvil" && WHO.lindsay==="OK");
+    // a household that already has data is never overwritten by a joining phone
+    items={ "c:1":{id:"c:1",kind:"todo",text:"existing",who:"ben",done:false} };
+    localStorage.setItem("ow-pending-setup", JSON.stringify({ben:"X", lindsay:"Y", picked:"X"}));
+    runSeeders();
+    console.log("existing household untouched by setup:", !items["meta:names"] && !!items["c:1"]);
+    localStorage.removeItem("ow-pending-setup");
+    items={}; applyNames(); me="ben";
+    console.log("defaults restored:", WHO.ben==="Ben" && WHO.lindsay==="Lindsay");
   })();
   console.log("OK");
 }

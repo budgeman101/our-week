@@ -385,8 +385,8 @@
 
   <footer>
     <div class="legend">
-      <span class="lg"><span class="sw" style="background:var(--ben)"></span>Ben</span>
-      <span class="lg"><span class="sw" style="background:var(--lindsay)"></span>Lindsay</span>
+      <span class="lg"><span class="sw" style="background:var(--ben)"></span><span id="legendBen">Ben</span></span>
+      <span class="lg"><span class="sw" style="background:var(--lindsay)"></span><span id="legendLindsay">Lindsay</span></span>
       <span class="lg"><span class="sw" style="background:var(--both)"></span>Both (bold)</span>
     </div>
     Tap any line to edit · <b>+ Add</b> anywhere · checks save per week and sync to any phone sharing your household code.
@@ -397,12 +397,17 @@
 <div class="overlay" id="welcome">
   <div class="sheet">
     <h2>Welcome</h2>
-    <p>Pick a private <b>household code</b> — Ben and Lindsay enter the <b>same</b> code on both phones to share one plan.</p>
-    <input type="text" id="welcomeCode" placeholder="e.g. ben-lindsay-2026-xyz" />
+    <p>Pick a private <b>household code</b> — everyone in your home enters the <b>same</b> code to share one plan. Keep it secret: the code is the only key to your data.</p>
+    <input type="text" id="welcomeCode" placeholder="e.g. our-home-2026-xyz" />
+    <p style="margin-top:14px">Your two names — put the partner whose <b>work shifts</b> you plan around second:</p>
+    <div style="display:flex; gap:8px">
+      <input type="text" id="welcomeNameA" placeholder="Person 1" autocomplete="off" />
+      <input type="text" id="welcomeNameB" placeholder="Person 2" autocomplete="off" />
+    </div>
     <div class="idpick" id="welcomeId">
       <span>This phone is:</span>
-      <button data-id="ben">Ben</button>
-      <button data-id="lindsay">Lindsay</button>
+      <button data-id="ben">Person 1</button>
+      <button data-id="lindsay">Person 2</button>
     </div>
     <button class="btn" id="welcomeStart">Start</button>
     <div class="meta">Until Firebase keys are added (see <code>SETUP-GUIDE.md</code>) this saves on <b>this device only</b> — no account needed.</div>
@@ -419,9 +424,14 @@
       <button data-id="ben">Ben</button>
       <button data-id="lindsay">Lindsay</button>
     </div>
+    <p style="margin-top:16px">Your names (shown on tags and cards):</p>
+    <div style="display:flex; gap:8px">
+      <input type="text" id="setNameA" autocomplete="off" />
+      <input type="text" id="setNameB" autocomplete="off" />
+    </div>
     <p style="margin-top:16px">Household code (must match on every phone that shares this plan):</p>
     <input type="text" id="setCode" />
-    <button class="btn" id="setSave">Save code</button>
+    <button class="btn" id="setSave">Save</button>
     <button class="btn sec" id="setReseed">Reload this week's starter to-dos</button>
     <button class="btn sec" id="setImport">Import tasks (JSON file)</button>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none" />
