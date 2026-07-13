@@ -256,6 +256,9 @@
   .psrule{margin-top:10px}
   .psrule label{display:flex; justify-content:space-between; align-items:baseline; font-size:.8rem; font-weight:600; margin-bottom:4px}
   .psrule .psen{color:var(--faint); font-weight:500; font-size:.72rem}
+  .hrow{display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:.84rem; padding:7px 2px; border-bottom:1px dashed var(--line)}
+  .hrow b{font-weight:600}
+  .hrow span{color:var(--muted); text-align:right}
   /* people editor rows (settings) */
   .prow{display:flex; gap:8px; align-items:center; margin-top:8px}
   .prow input{flex:1; min-width:0; margin:0}
@@ -460,19 +463,30 @@
 <!-- Person: shifts & day rules (behind the scenes) -->
 <div class="overlay" id="personSheet">
   <div class="sheet">
-    <h2><svg width="19" height="19"><use href="#i-gear"/></svg> <span id="psName">Person</span> — shifts &amp; day rules</h2>
-    <p>Work shifts — tap one to change or delete it:</p>
+    <h2><svg width="19" height="19"><use href="#i-gear"/></svg> <span id="psName">Person</span></h2>
+    <p>Put their <b>work shifts</b> in here — the app reads them and fills in their day-card by itself.</p>
+
+    <div class="psgrp" style="margin-top:14px">Their work shifts</div>
     <div id="psShifts"></div>
     <button class="lnk" id="psAddShift" style="margin-top:8px">+ Add a shift</button>
-    <p style="margin-top:18px">Their card's note row is called:</p>
+    <div class="pshint">Tap a shift to change or delete it. Put end times in — that's how the app knows how big a day is.</div>
+
+    <div class="psgrp" style="margin-top:20px">Their spare-time row</div>
+    <p style="margin-top:6px">The row on their card for the thing they chip away at. Call it anything:</p>
     <input type="text" id="psLabel" autocomplete="off" />
-    <div class="psrule" style="margin-top:18px"><label>Hours they can give it on a totally free day</label><input type="number" id="psFree" min="0" step="0.5" inputmode="decimal" /></div>
-    <div class="psrule"><label>A heavy day is this many hours of shifts <span class="psen">a day's shifts add up</span></label><input type="number" id="psLong" min="1" step="0.5" inputmode="decimal" /></div>
-    <p style="margin-top:18px">The app fills the row from their shifts — full hours on a free day, about half round a short shift, an hour after a full day, rest on a heavy day, rest before nights and on recovery days. If tomorrow's first shift starts before 8&nbsp;am, their card says so tonight. Want different wording for a situation? Type it (blank = automatic). A note typed on the day itself always wins:</p>
-    <div class="psrule"><label>Works tonight <span class="psen">shows as low energy</span></label><input type="text" id="psR_night" autocomplete="off" /></div>
-    <div class="psrule"><label>Day after a night shift <span class="psen">shows as lowest energy</span></label><input type="text" id="psR_recovery" autocomplete="off" /></div>
-    <div class="psrule"><label>Day shift <span class="psen">heavy days show as low energy</span></label><input type="text" id="psR_day" autocomplete="off" /></div>
-    <div class="psrule"><label>No shift <span class="psen">normal energy — no flag</span></label><input type="text" id="psR_free" autocomplete="off" /></div>
+    <div class="psrule"><label>Hours for it on a totally <b>free</b> day</label><input type="number" id="psFree" min="0" step="0.5" inputmode="decimal" /></div>
+    <div class="psrule"><label>Hours of work that make a <b>heavy</b> day <span class="psen">a day's shifts add up</span></label><input type="number" id="psLong" min="1" step="0.5" inputmode="decimal" /></div>
+
+    <div class="psgrp" style="margin-top:20px">So their card will say</div>
+    <div id="psHow"></div>
+    <button class="lnk" id="psWordToggle" style="margin-top:8px">Change the wording…</button>
+    <div id="psWordWrap" style="display:none">
+      <div class="pshint" style="margin-top:8px">Blank = the automatic text above. A note typed on the day itself always wins.</div>
+      <div class="psrule"><label>Works that evening / night</label><input type="text" id="psR_night" autocomplete="off" /></div>
+      <div class="psrule"><label>Day after a night shift</label><input type="text" id="psR_recovery" autocomplete="off" /></div>
+      <div class="psrule"><label>On a day shift</label><input type="text" id="psR_day" autocomplete="off" /></div>
+      <div class="psrule"><label>On a free day</label><input type="text" id="psR_free" autocomplete="off" /></div>
+    </div>
     <button class="btn" id="psSave">Save</button>
     <button class="btn sec" id="psClose">Close</button>
   </div>

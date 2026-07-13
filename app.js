@@ -1896,6 +1896,20 @@ if(HAS_DOM){
     const when=s.repeat ? "Every "+DAY_SHORT[weekdayOf(s.date)] : fmtDateShort(s.date);
     return `<button class="srow" data-shift="${s.id}"><b>${when}</b>&nbsp;· ${esc(t)}${s.label?' <span class="shiftlabel">'+esc(s.label)+'</span>':''}<span class="sedit">edit</span></button>`;
   }
+  /* the plain-words picture of what the numbers do — re-drawn live as
+     the fields above it are typed in */
+  function paintPsHow(){
+    const F=parseFloat(document.getElementById("psFree").value)||4;
+    const LD=parseFloat(document.getElementById("psLong").value)||LONG_SHIFT_H;
+    const lbl=cleanName(document.getElementById("psLabel").value)||noteRowLabel();
+    document.getElementById("psHow").innerHTML =
+      '<div class="hrow"><b>Free day</b><span>'+esc(lbl)+': ~'+F+' hrs</span></div>'+
+      '<div class="hrow"><b>Short shift (under 5 h)</b><span>~'+Math.max(1,Math.round(F/2))+' hrs</span></div>'+
+      '<div class="hrow"><b>Full day</b><span>~1 hr in the evening</span></div>'+
+      '<div class="hrow"><b>Heavy day ('+LD+' h+ of shifts)</b><span>Rest · family sees "low energy"</span></div>'+
+      '<div class="hrow"><b>Night shift</b><span>Rest before work · next day recovers</span></div>'+
+      '<div class="hrow"><b>Early start next day (before 8 am)</b><span>heads-up the evening before</span></div>';
+  }
   function openPersonSheet(mid){
     personMid=mid;
     const m=members().find(x=>x.id===mid) || {name:"?", color:0};
@@ -1924,6 +1938,11 @@ if(HAS_DOM){
     document.getElementById("psR_recovery").placeholder="auto: Rest — recovery";
     document.getElementById("psR_day").placeholder="auto: ~"+Math.max(1,Math.round(Fv/2))+" hrs short · ~1 hr full · rest "+LDv+"+";
     document.getElementById("psR_free").placeholder="auto: ~"+Fv+" hrs";
+    paintPsHow();
+    // wording overrides stay tucked away unless they're in use
+    const hasWording=["night","recovery","day","free"].some(k=>(r[k]||"")!=="");
+    document.getElementById("psWordWrap").style.display = hasWording ? "" : "none";
+    document.getElementById("psWordToggle").style.display = hasWording ? "none" : "";
     overlayPerson.classList.add("show");
   }
   document.getElementById("psShifts").addEventListener("click", e=>{
@@ -1932,6 +1951,11 @@ if(HAS_DOM){
     openEditor(b.dataset.shift);
   });
   document.getElementById("psAddShift").onclick=()=>{ overlayPerson.classList.remove("show"); addShift(personMid); };
+  document.getElementById("psWordToggle").onclick=()=>{
+    document.getElementById("psWordWrap").style.display="";
+    document.getElementById("psWordToggle").style.display="none";
+  };
+  ["psFree","psLong","psLabel"].forEach(id=> document.getElementById(id).addEventListener("input", paintPsHow));
   document.getElementById("psSave").onclick=()=>{
     if(!personMid) return;
     const val=id=>document.getElementById(id).value.trim().slice(0,80);
