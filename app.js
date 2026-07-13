@@ -36,6 +36,14 @@ const CONFIGURED = !String(firebaseConfig.apiKey).startsWith("PASTE_") && !FORCE
 const VAPID_PUBLIC_KEY = "BO4M0rjTcevPmcBdN76KMv0Z28_oMZ0zByxUh2OsH0pJuOKGnO5sIEO2p2sQkm6g2ZlruNb2rtqiO-LV15GQDQ0";
 const PUSH_KEYED = /^[A-Za-z0-9_-]{80,}$/.test(VAPID_PUBLIC_KEY);
 
+/* ------------------------------------------------------------------ *
+ *  AI schedule scan — shares Our Kitchen's vision Worker (same URL,
+ *  same monthly guest-pass allowance keyed on the household code).
+ *  Blank = the feature hides itself. See AI-GUEST-PASS.md.
+ * ------------------------------------------------------------------ */
+const WORKER_URL = "https://our-kitchen-receipt.budgeman101.workers.dev";
+const AI_ENABLED = /^https:\/\//.test(WORKER_URL);
+
 /* ============================ constants =========================== */
 const WHO = { ben:"Ben", lindsay:"Lindsay", both:"Both" };   // display names by id — rebuilt by applyNames()
 const WHO_ORDER = ["ben","lindsay","both"];                  // member ids + "both" last — rebuilt by applyNames()
@@ -1103,6 +1111,80 @@ function comingUp(){
   return list;
 }
 
+/* ===================== AI schedule scan ========================== *
+ *  Photograph a work rota → shifts for one person. Uses the shared
+ *  Kitchen Worker (mode "schedule"); the household's monthly allowance
+ *  and the "ask Ben" messages are enforced Worker-side. */
+let scanShifts = [], scanMid = null;
+// shrink a photo to a base64 JPEG small enough to POST quickly
+function fileToDownscaled(file, max){
+  return new Promise((resolve, reject)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const scale=Math.min(1, (max||1400)/Math.max(img.width, img.height));
+      const c=document.createElement("canvas");
+      c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      resolve(c.toDataURL("image/jpeg",0.82).split(",")[1]);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error("image")); };
+    img.src=url;
+  });
+}
+async function askWorker(payload){
+  const res=await fetch(WORKER_URL,{ method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(Object.assign({household}, payload)) });
+  const data=await res.json().catch(()=>null);
+  if(!res.ok){
+    const e=new Error((data&&data.error)||("worker "+res.status));
+    e.friendly=(res.status===403||res.status===429)&&!!(data&&data.error);
+    throw e;
+  }
+  const left=res.headers.get("x-uses-left");
+  if(left!==null && Number(left)<=10) setTimeout(()=>showToast(left+" AI scans left this month — ask Ben if you need more"),1500);
+  return data;
+}
+async function scanSchedule(file, mid){
+  if(!file) return;
+  scanMid=mid;
+  showToast("Reading the schedule…");
+  try{
+    const b64=await fileToDownscaled(file);
+    const data=await askWorker({ mode:"schedule", today:todayISO(), image:b64, mediaType:"image/jpeg" });
+    const shifts=Array.isArray(data)?data:[];
+    if(!shifts.length){ showToast("No shifts found — try a clearer photo"); return; }
+    openScanReview(shifts);
+  }catch(e){ console.error("schedule scan failed", e); showToast(e.friendly?e.message:"Couldn't read that schedule — try again"); }
+}
+function fmtScanRow(s, i){
+  const d=new Date(s.date+"T00:00:00");
+  const when=isNaN(d)?s.date:d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+  const time=fmtTime(s.start)+(s.end?"–"+fmtTime(s.end):"");
+  return `<label class="srow"><input type="checkbox" data-i="${i}" checked> <b>${esc(when)}</b>&nbsp;· ${esc(time)}${s.label?' <span class="shiftlabel">'+esc(s.label)+'</span>':''}</label>`;
+}
+function openScanReview(shifts){
+  if(!HAS_DOM) return;
+  scanShifts=shifts;
+  const who=WHO[scanMid]||"this person";
+  document.getElementById("scanReviewName").textContent=who;
+  document.getElementById("scanReviewList").innerHTML=shifts.map(fmtScanRow).join("");
+  document.getElementById("scanReview").classList.add("show");
+}
+function addScannedShifts(){
+  const boxes=[...document.querySelectorAll("#scanReviewList input:checked")].map(b=>Number(b.dataset.i));
+  let n=0;
+  boxes.forEach(i=>{
+    const s=scanShifts[i]; if(!s) return;
+    const id="shift:"+Date.now()+Math.random().toString(36).slice(2,6);
+    put({ id, kind:"shift", who:scanMid, label:s.label||"", date:s.date, start:s.start, end:s.end||"", repeat:false });
+    n++;
+  });
+  document.getElementById("scanReview").classList.remove("show");
+  scanShifts=[]; render();
+  showToast(n?("Added "+n+" shift"+(n===1?"":"s")):"Nothing added");
+}
+
 /* ============================== editor ============================ */
 function labelForInfo(t){
   const f=t.field;
@@ -1975,6 +2057,7 @@ if(HAS_DOM){
     document.getElementById("psShifts").innerHTML =
       (weekly.length?'<div class="psgrp">Every week</div>'+weekly.map(psShiftRow).join(""):'<div class="pshint">No weekly shifts yet — add one and tick "Repeats weekly".</div>')+
       (oneoffs.length?'<div class="psgrp">Coming up (one-offs)</div>'+oneoffs.map(psShiftRow).join(""):"");
+    document.getElementById("psScanShift").style.display = AI_ENABLED ? "" : "none";
     const r=rulesDoc(mid)||{};
     const lbl=document.getElementById("psLabel");
     lbl.value=r.rowLabel||""; lbl.placeholder=noteRowLabel()+", Study, Notes…";
@@ -2004,6 +2087,15 @@ if(HAS_DOM){
     openEditor(b.dataset.shift);
   });
   document.getElementById("psAddShift").onclick=()=>{ overlayPerson.classList.remove("show"); addShift(personMid); };
+  document.getElementById("psScanShift").onclick=()=>document.getElementById("psScanFile").click();
+  document.getElementById("psScanFile").addEventListener("change", e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f) return;
+    const mid=personMid;
+    overlayPerson.classList.remove("show");
+    scanSchedule(f, mid);
+  });
+  document.getElementById("scanReviewAdd").onclick=addScannedShifts;
+  document.getElementById("scanReviewCancel").onclick=()=>{ document.getElementById("scanReview").classList.remove("show"); scanShifts=[]; };
   document.getElementById("psWordToggle").onclick=()=>{
     document.getElementById("psWordWrap").style.display="";
     document.getElementById("psWordToggle").style.display="none";

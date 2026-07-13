@@ -489,6 +489,8 @@
     <div class="psgrp" style="margin-top:14px">Their work shifts</div>
     <div id="psShifts"></div>
     <button class="lnk" id="psAddShift" style="margin-top:8px">+ Add a shift</button>
+    <button class="lnk" id="psScanShift" style="margin-top:8px; display:none">📷 Scan a schedule photo</button>
+    <input type="file" id="psScanFile" accept="image/*" capture="environment" style="display:none" />
     <div class="pshint">Tap a shift to change or delete it. Put end times in — that's how the app knows how big a day is.</div>
 
     <div class="psgrp" style="margin-top:20px">Their spare-time row</div>
@@ -509,6 +511,18 @@
     </div>
     <button class="btn" id="psSave">Save</button>
     <button class="btn sec" id="psClose">Close</button>
+  </div>
+</div>
+
+<!-- Scanned-schedule review -->
+<div class="overlay" id="scanReview">
+  <div class="sheet">
+    <h2>Shifts for <span id="scanReviewName">them</span></h2>
+    <p>From the photo — untick any that are wrong, then add them:</p>
+    <div id="scanReviewList"></div>
+    <button class="btn" id="scanReviewAdd">Add these shifts</button>
+    <button class="btn sec" id="scanReviewCancel">Cancel</button>
+    <div class="meta">Double-check dates and times — a scan can misread. You can edit any shift afterwards.</div>
   </div>
 </div>
 

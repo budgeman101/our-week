@@ -5,6 +5,7 @@
 //                          POST { household, mode:"recipe", image, mediaType }  (cookbook photo)
 //   3) "What's for dinner"— POST { household, mode:"suggest", pantry:[…] }      -> JSON array of ideas
 //   4) Handwritten list  — POST { household, mode:"list", image, mediaType }    -> JSON array of items
+//   5) Work schedule scan — POST { household, mode:"schedule", today, image }   -> JSON array of shifts
 //
 // THE GUEST PASS: every request carries the sender's household code. Only codes
 // listed in the HOUSEHOLDS setting are served, each with a monthly allowance;
@@ -43,6 +44,22 @@ Rules:
 
 Return ONLY a JSON array, no prose and no code fences. Each element:
 {"name": string, "qty": number, "unit": string, "price": number, "cat": string, "perishable": boolean}`;
+
+function SHIFT_PROMPT(today) {
+  return `You are reading a photo of ONE person's WORK SCHEDULE — it may be a screenshot from an app (e.g. Amazon Flex, a delivery or retail scheduler), a printed rota, or a handwritten one. Extract every work shift you can see for this person.
+
+Today's date is ${today} (YYYY-MM-DD). Use it to turn weekdays and month/day dates into full calendar dates in the current or coming week — never a past date; if a weekday has already passed this week, use next week's.
+
+Rules:
+- date: the shift's calendar date as "YYYY-MM-DD".
+- start / end: 24-hour "HH:MM". If only a start is shown, leave end as "". Convert am/pm correctly (7p = "19:00", 6:30a = "06:30").
+- label: a short note if one is shown (e.g. the station, role, or block name); otherwise "".
+- Include only actual work shifts. Ignore days marked off, unavailable, blank, or "no shift".
+- If the same day shows two separate blocks, return two entries.
+
+Return ONLY a JSON array, no prose and no code fences. Each element:
+{"date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM", "label": string}`;
+}
 
 const RECIPE_PROMPT = `You are extracting ONE recipe — either from the text of a web page or from a photo of a cookbook / recipe card.
 
@@ -153,6 +170,7 @@ export default {
       if (body.mode === "recipe") res = await handleRecipe(body, env, cors);
       else if (body.mode === "suggest") res = await handleSuggest(body, env, cors);
       else if (body.mode === "list") res = await handleList(body, env, cors);
+      else if (body.mode === "schedule") res = await handleSchedule(body, env, cors);
       else res = await handleReceipt(body, env, cors);
       return await countUse(env, hh, pass, res);
     } catch (e) {
@@ -210,6 +228,30 @@ async function handleList(body, env, cors) {
   })).filter((it) => it.name);
 
   return json(items, 200, cors);
+}
+
+/* ---------- work schedule scan (photo) ---------- */
+async function handleSchedule(body, env, cors) {
+  const { image, mediaType } = body;
+  if (!image) return json({ error: "no image provided" }, 400, cors);
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(String(body.today || "")) ? body.today : new Date().toISOString().slice(0, 10);
+
+  const res = await callClaude(env, [
+    { type: "image", source: { type: "base64", media_type: mediaType || "image/jpeg", data: image } },
+    { type: "text", text: SHIFT_PROMPT(today) },
+  ], 2000);
+  if (res.error) return json(res.error, res.status, cors);
+
+  const hhmm = (v) => (/^\d{1,2}:\d{2}$/.test(String(v || "")) ? String(v).padStart(5, "0") : "");
+  let shifts = parseArray(res.text);
+  shifts = shifts.map((s) => ({
+    date: /^\d{4}-\d{2}-\d{2}$/.test(String(s && s.date)) ? s.date : "",
+    start: hhmm(s && s.start),
+    end: hhmm(s && s.end),
+    label: String((s && s.label) || "").trim().slice(0, 40),
+  })).filter((s) => s.date && s.start);
+
+  return json(shifts, 200, cors);
 }
 
 /* ---------- recipe import (link or photo) ---------- */
