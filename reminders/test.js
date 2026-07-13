@@ -45,5 +45,12 @@ ok("'both' reads Everyone in a 3-person home", dueReminders(at13(8, 10), [mems, 
 ok("renamed pair still works via meta:names",  dueReminders(at13(16, 35), [{ _id: "meta:names", kind: "names", ben: "Alex", lindsay: "Jamie" }, shift], cfg)[0].title.indexOf("Jamie's shift") === 0);
 ok("no names anywhere → original defaults",    dueReminders(at13(16, 35), [shift], cfg)[0].title.indexOf("Lindsay's shift") === 0);
 
+/* --- per-household timezone: each family's reminders fire on THEIR clock --- */
+const tzTor = { _id: "meta:tz", kind: "tz", tz: "America/Toronto" };   // 2 h ahead of Edmonton
+const at13Tor = (h, mi) => wallToMs(2026, 7, 13, h, mi, "America/Toronto");
+ok("household tz overrides the workflow tz", dueReminders(at13Tor(16, 35), [tzTor, shift], cfg).length === 1);
+ok("…and the same instant is NOT due on the fallback clock", !dueReminders(at13Tor(16, 35), [shift], cfg).length);
+ok("a junk tz value falls back safely",      dueReminders(at13(16, 35), [{ _id: "meta:tz", kind: "tz", tz: "Not/AZone" }, shift], cfg).length === 1);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

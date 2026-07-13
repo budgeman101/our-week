@@ -594,10 +594,46 @@ function seedNeutralIfNeeded(){
 /* one gate for every (re)connect + snapshot: new-style households seed
    neutral, everything else keeps the original behaviour (sentinels make
    re-runs no-ops either way) */
+function pendingJoin(){ return localStorage.getItem("ow-pending-join")==="1"; }
 function runSeeders(){
+  // joining an existing family: never seed anything until we've seen
+  // what actually lives under the code (a typo must not create a plan)
+  if(pendingJoin()){ handleJoinPending(); autoRoll(); return; }
   if(pendingSetup() || namesDoc() || membersDoc()) seedNeutralIfNeeded();
   else { seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); }
-  autoRoll(); migrateRemoveJohny();
+  autoRoll(); migrateRemoveJohny(); syncTimezone();
+}
+/* once the cloud has answered: real family → pick who you are;
+   nothing there → the code is wrong, back to the welcome card */
+function handleJoinPending(){
+  if(!HAS_DOM) return;
+  const settled = colRef || !CONFIGURED;
+  if(!settled) return;
+  const hasData = namesDoc() || membersDoc() || Object.values(items).some(t=>t && t.kind && t.kind!=="meta");
+  if(hasData){ openJoinPick(); return; }
+  localStorage.removeItem("ow-pending-join");
+  household=""; localStorage.removeItem("ow-household");
+  alert(CONFIGURED
+    ? "Nothing found under that code — double-check it with your family (spelling and dashes matter)."
+    : "Joining needs live sync, and this copy of the app runs on this device only.");
+  location.reload();
+}
+function openJoinPick(){
+  if(!HAS_DOM) return;
+  const row=document.getElementById("joinPickRow"); if(!row) return;
+  row.innerHTML = members().map(m=>'<button data-id="'+m.id+'">'+esc(m.name)+'</button>').join("");
+  document.getElementById("joinPick").classList.add("show");
+}
+/* the reminder sender fires on each household's own clock — keep a
+   meta:tz doc saying which timezone this family's phones live in */
+function syncTimezone(){
+  if(!HAS_DOM) return;
+  try{
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if(!tz) return;
+    const d=items["meta:tz"];
+    if(!d || d.tz!==tz) put({ id:"meta:tz", kind:"tz", tz, ts:Date.now() });
+  }catch(e){}
 }
 function autoRoll(){
   const rk = realWeekKey(); let n=0;
@@ -649,7 +685,15 @@ function isSeeded(t){ return !!t && (t.seed || /^(s:|info:|care:|clean:|tpl:)/.t
 
 /* notes */
 function notesAll(){ return Object.values(items).filter(t=>t.kind==="note"&&!t._gone).sort((a,b)=>b.ts-a.ts); }
-function unreadCount(){ return notesAll().filter(n=>n.by!==me && !n.seenBy).length; }
+/* who has seen a note — notes from before people-lists stored a single
+   {who,ts}; now it's a map of member id → ts so in a bigger family
+   each person Got-its separately */
+function noteSeenMap(n){
+  if(!n || !n.seenBy) return {};
+  if(typeof n.seenBy.who==="string"){ const m={}; m[n.seenBy.who]=n.seenBy.ts||0; return m; }
+  return n.seenBy;
+}
+function unreadCount(){ return notesAll().filter(n=>n.by!==me && !noteSeenMap(n)[me]).length; }
 
 /* projects */
 function projectsAll(){ return Object.values(items).filter(t=>t.kind==="project"&&!t._gone&&!t.archived).sort((a,b)=>(a.order||0)-(b.order||0)); }
@@ -712,6 +756,14 @@ function importMany(arr){
   });
   return n;
 }
+/* a downloaded backup holds the whole household — putting every doc
+   back is a full restore (same ids overwrite, everything else stays) */
+function restoreBackup(obj){
+  if(!obj || typeof obj!=="object" || Array.isArray(obj) || !obj.items || typeof obj.items!=="object") return -1;
+  let n=0;
+  Object.values(obj.items).forEach(d=>{ if(d && d.id && d.kind){ put(d); n++; } });
+  return n;
+}
 function addTpl(sec, scope, check, mid){
   const id="u:"+Date.now()+Math.random().toString(36).slice(2,5);
   const list = sec==="care" ? careItems(scope) : tplList(sec, scope);
@@ -731,7 +783,7 @@ function addNote(text){
   put({ id, kind:"note", text, by:(me||"both"), ts:Date.now(), seenBy:null });
   render();
 }
-function ackNote(id){ const n=items[id]; if(!n) return; n.seenBy={who:me||"both", ts:Date.now()}; put(n); render(); }
+function ackNote(id){ const n=items[id]; if(!n) return; const m=noteSeenMap(n); m[me||"both"]=Date.now(); n.seenBy=m; put(n); render(); }
 function delNote(id){
   const n=items[id]; if(!n) return;
   lastDeleted={ id, seeded:false, doc:JSON.parse(JSON.stringify(n)) };
@@ -1606,9 +1658,10 @@ function renderNotes(){
   const notes=notesAll();
   let html = notes.map(n=>{
     const mine = n.by===me;
+    const seen=noteSeenMap(n), seers=Object.keys(seen);
     const status = mine
-      ? (n.seenBy ? `<span class="seen">Seen by ${WHO[n.seenBy.who]||"them"}</span>` : `<span class="unseen">Not seen yet</span>`)
-      : (n.seenBy ? `<span class="seen">Got it</span>` : `<button class="gotit" data-act="ack">Got it</button>`);
+      ? (seers.length ? `<span class="seen">Seen by ${seers.map(id=>WHO[id]||"them").join(" & ")}</span>` : `<span class="unseen">Not seen yet</span>`)
+      : (seen[me] ? `<span class="seen">Got it</span>` : `<button class="gotit" data-act="ack">Got it</button>`);
     return `<div class="note ${mine?'mine':''}" data-id="${n.id}">
       <div class="nmeta"><span class="nby">${WHO[n.by]||"Someone"}</span> · ${relTime(n.ts)}
         <button class="ndel" data-act="ndel" aria-label="Delete"><svg width="14" height="14"><use href="#i-trash"/></svg></button></div>
@@ -2112,29 +2165,89 @@ if(HAS_DOM){
       enableReminders();   // even without moving data, reminders follow the code
     }
   };
+  document.getElementById("setShareCode").onclick=async ()=>{
+    const msg="Join our family plan on Our Week!\nCode: "+household+"\nOpen "+location.href.split(/[?#]/)[0]+" , tap “Join my family” and type the code exactly.";
+    try{
+      if(navigator.share){ await navigator.share({ text: msg }); return; }
+      await navigator.clipboard.writeText(msg);
+      showToast("Invite copied — paste it to your family");
+    }catch(e){ /* share sheet closed — nothing to do */ }
+  };
   document.getElementById("setReseed").onclick=()=>{
     if(confirm("Re-add this week's starter to-dos? (Your own added items stay.)")){
       seedTodosIfNeeded(true); overlaySettings.classList.remove("show"); render();
     }
   };
-  /* import an agent-sorted dump — JSON format in DUMP-IMPORT.md */
+  /* backup: the whole household as one file */
+  document.getElementById("setBackup").onclick=()=>{
+    const blob=new Blob([JSON.stringify({ app:"our-week", exportedAt:new Date().toISOString(), items }, null, 1)], {type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="our-week-backup-"+todayISO()+".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    showToast("Backup downloaded");
+  };
+  /* import: a task dump (DUMP-IMPORT.md) or a full backup file */
   document.getElementById("setImport").onclick=()=>document.getElementById("importFile").click();
   document.getElementById("importFile").addEventListener("change", e=>{
     const f=e.target.files[0]; e.target.value=""; if(!f) return;
     const r=new FileReader();
     r.onload=()=>{
-      let n=0;
-      try{ n=importMany(JSON.parse(r.result)); }
-      catch(err){ alert("Couldn't read that file — expected a JSON list of tasks (see DUMP-IMPORT.md)."); return; }
+      let parsed;
+      try{ parsed=JSON.parse(r.result); }
+      catch(err){ alert("Couldn't read that file — expected a JSON list of tasks (see DUMP-IMPORT.md) or an Our Week backup."); return; }
+      if(parsed && !Array.isArray(parsed) && parsed.items){
+        const count=Object.keys(parsed.items).length;
+        if(!confirm("This looks like a full backup ("+count+" items). Restore it into this household? Items with the same ids are overwritten; everything else stays.")) return;
+        const n=restoreBackup(parsed);
+        if(n<0){ alert("Couldn't read that backup."); return; }
+        overlaySettings.classList.remove("show"); render();
+        showToast("Restored "+n+" item"+(n===1?"":"s"));
+        return;
+      }
+      const n=importMany(parsed);
       overlaySettings.classList.remove("show");
       view="list"; render();
       showToast("Imported "+n+" task"+(n===1?"":"s"));
     };
     r.readAsText(f);
   });
+  /* welcome mode: start fresh, or join a family that already exists */
+  let joinMode=false;
+  document.getElementById("welcomeMode").addEventListener("click", e=>{
+    const b=e.target.closest("[data-mode]"); if(!b) return;
+    joinMode = b.dataset.mode==="join";
+    document.querySelectorAll("#welcomeMode button").forEach(x=>x.classList.toggle("on", x===b));
+    show("welcomeNewFields", !joinMode);
+    show("welcomeNewCopy", !joinMode);
+    show("welcomeJoinCopy", joinMode);
+    document.getElementById("welcomeStart").textContent = joinMode ? "Join" : "Start";
+    if(joinMode) document.getElementById("welcomeCode").value="";   // they'll type the real one
+  });
+  /* joining: pick who you are, or step back out */
+  document.getElementById("joinPickRow").addEventListener("click", e=>{
+    const b=e.target.closest("[data-id]"); if(!b) return;
+    me=b.dataset.id; localStorage.setItem("ow-me", me);
+    localStorage.removeItem("ow-pending-join");
+    document.getElementById("joinPick").classList.remove("show");
+    render(); showToast("You're in — welcome!");
+  });
+  document.getElementById("joinBack").onclick=()=>{
+    localStorage.removeItem("ow-pending-join");
+    household=""; localStorage.removeItem("ow-household");
+    location.reload();
+  };
   document.getElementById("welcomeStart").onclick=()=>{
     const v=document.getElementById("welcomeCode").value.trim();
     if(!v){ document.getElementById("welcomeCode").focus(); return; }
+    if(joinMode){
+      household=v; localStorage.setItem("ow-household", household);
+      localStorage.setItem("ow-pending-join","1");
+      overlayWelcome.classList.remove("show");
+      connect();
+      return;
+    }
     const inputs=welcomeNameInputs();
     const raw=inputs.map(el=>cleanName(el.value));
     if(!raw[0]){ inputs[0].focus(); return; }
@@ -2153,7 +2266,11 @@ if(HAS_DOM){
   };
 
   /* boot */
-  if(!household || !me){
+  if(pendingJoin() && household){
+    // mid-join (e.g. the app reloaded): reconnect and the picker returns
+    connect();
+  } else if(!household || !me){
+    localStorage.removeItem("ow-pending-join");
     document.getElementById("welcomeCode").value = household || "our-home-"+Math.random().toString(36).slice(2,8);
     welcomeId = "";
     addWelcomeName(); addWelcomeName();
@@ -2494,6 +2611,21 @@ if(!HAS_DOM){
       return day && noRec && endless;
     })());
     console.log("members: first-shift default start is morning for new families:", defaultShiftStart(0,"p3")==="09:00");
+    console.log("notes: got-it per person + old shape compat:", (function(){
+      items["note:t"]={id:"note:t",kind:"note",text:"x",by:"ben",ts:1,seenBy:{who:"lindsay",ts:2}};
+      me="p3"; const unreadBefore=unreadCount()===1;      // old shape counted as lindsay-only
+      ackNote("note:t");
+      const m=noteSeenMap(items["note:t"]);
+      me="lindsay"; const linKept=!!m.lindsay && unreadCount()===0;
+      me="ben"; delete items["note:t"];
+      return unreadBefore && !!m.p3 && linKept;
+    })());
+    console.log("backup: restore puts every doc back, garbage is refused:", (function(){
+      const saved=Object.assign({},items);
+      const n=restoreBackup({ app:"our-week", items:{ "c:bk":{id:"c:bk",kind:"todo",text:"from backup",who:"both",done:false} } });
+      const ok = n===1 && !!items["c:bk"] && restoreBackup([1,2])===-1 && restoreBackup({foo:1})===-1 && restoreBackup(null)===-1;
+      items=saved; return ok;
+    })());
     console.log("members: care chips follow their person:", (function(){
       items["care:t1"]={id:"care:t1",kind:"tpl",sec:"care",scope:0,text:"Old chip",icon:"i-paw",order:0};             // pre-members: no mid
       items["care:t2"]={id:"care:t2",kind:"tpl",sec:"care",scope:0,text:"Sam breakfast",icon:"i-child",order:1,mid:"p3"};

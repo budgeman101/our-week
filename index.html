@@ -422,16 +422,34 @@
 <div class="overlay" id="welcome">
   <div class="sheet">
     <h2>Welcome</h2>
-    <p>Pick a private <b>household code</b> — everyone in your home enters the <b>same</b> code to share one plan. Keep it secret: the code is the only key to your data.</p>
+    <div class="idpick" id="welcomeMode" style="margin-top:4px">
+      <button data-mode="new" class="on">Start a new family</button>
+      <button data-mode="join">Join my family</button>
+    </div>
+    <p id="welcomeNewCopy" style="margin-top:14px">Pick a private <b>household code</b> — everyone in your home enters the <b>same</b> code to share one plan. Keep it secret: the code is the only key to your data.</p>
+    <p id="welcomeJoinCopy" style="margin-top:14px; display:none">Type the <b>household code</b> your family already uses — exactly as it was sent to you. You'll pick which person you are once the plan loads.</p>
     <input type="text" id="welcomeCode" placeholder="e.g. our-home-2026-xyz" />
-    <p style="margin-top:14px">The adults sharing this plan — you can rename, recolour or add people later in Settings:</p>
-    <div id="welcomeNames" style="display:flex; flex-direction:column; gap:8px"></div>
-    <button class="lnk" id="welcomeAddPerson" style="margin-top:8px">+ Add another adult</button>
-    <div class="idpick" id="welcomeId">
-      <span>This phone is:</span>
+    <div id="welcomeNewFields">
+      <p style="margin-top:14px">The adults sharing this plan — you can rename, recolour or add people later in Settings:</p>
+      <div id="welcomeNames" style="display:flex; flex-direction:column; gap:8px"></div>
+      <button class="lnk" id="welcomeAddPerson" style="margin-top:8px">+ Add another adult</button>
+      <div class="idpick" id="welcomeId">
+        <span>This phone is:</span>
+      </div>
     </div>
     <button class="btn" id="welcomeStart">Start</button>
     <div class="meta">Until Firebase keys are added (see <code>SETUP-GUIDE.md</code>) this saves on <b>this device only</b> — no account needed.</div>
+  </div>
+</div>
+
+<!-- Joining: pick who you are -->
+<div class="overlay" id="joinPick">
+  <div class="sheet">
+    <h2>Found your family</h2>
+    <p>Which one are you?</p>
+    <div class="idpick" id="joinPickRow"></div>
+    <button class="btn sec" id="joinBack" style="margin-top:14px">Back — wrong code</button>
+    <div class="meta">Wrong names showing? Go back and check the code with whoever sent it.</div>
   </div>
 </div>
 
@@ -445,11 +463,13 @@
     <p style="margin-top:16px">Your people (shown on tags and cards) — tap a dot to change their colour:</p>
     <div id="setPeople"></div>
     <button class="lnk" id="setAddPerson" style="margin-top:8px">+ Add a person</button>
-    <p style="margin-top:16px">Household code (must match on every phone that shares this plan):</p>
+    <p style="margin-top:16px">Household code — the <b>only key</b> to your family's plan. Keep it safe, and it must match on every phone:</p>
     <input type="text" id="setCode" />
+    <button class="lnk" id="setShareCode" style="margin-top:6px">Share / copy an invite…</button>
     <button class="btn" id="setSave">Save</button>
     <button class="btn sec" id="setReseed">Reload this week's starter to-dos</button>
-    <button class="btn sec" id="setImport">Import tasks (JSON file)</button>
+    <button class="btn sec" id="setBackup">Download a backup</button>
+    <button class="btn sec" id="setImport">Import tasks or restore a backup</button>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none" />
     <div id="remindSec" style="margin-top:18px; border-top:1px solid var(--line); padding-top:14px">
       <div class="statusline" id="remindStatus"></div>

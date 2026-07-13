@@ -68,11 +68,22 @@ function memberNames(items) {
   map.both = count > 2 ? "Everyone" : "Both";
   return map;
 }
+// Each household lives in its own timezone: the app saves the phone's
+// zone as a meta:tz doc, and reminders fire on THAT clock. Falls back
+// to the workflow's TIMEZONE setting for households that predate it.
+function householdTz(items, fallback) {
+  const d = items.find((t) => (t._id || t.id) === "meta:tz");
+  if (d && d.tz) {
+    try { new Intl.DateTimeFormat("en-CA", { timeZone: d.tz }); return d.tz; }
+    catch (e) { /* unknown zone name — use the fallback */ }
+  }
+  return fallback;
+}
 // items: array of plain objects (kind, ...). now: epoch ms.
 // returns every reminder whose fire-time is in the window [now-maxAge, now];
 // the caller filters out ones already sent. Pure — no network, no clock reads.
 function dueReminders(now, items, cfg) {
-  const tz = cfg.tz;
+  const tz = householdTz(items, cfg.tz);
   const names = memberNames(items);
   const out = [];
   const within = (fireMs) => fireMs <= now && (now - fireMs) < cfg.maxAgeMin * 60000;
@@ -221,4 +232,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { dueReminders, memberNames, wallToMs, localDateStr, weekdayMon0, mondayISO, fmt12 };
+module.exports = { dueReminders, memberNames, householdTz, wallToMs, localDateStr, weekdayMon0, mondayISO, fmt12 };
