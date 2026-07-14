@@ -856,14 +856,18 @@
    between phones. Leave as-is to use the app on one device only.
    Step-by-step guide is in SETUP-GUIDE.md
    ============================================================ */
+// One home for the whole household: the Kitchen now shares the Week's
+// Firebase project. The Kitchen keeps its own single doc at
+// households/<code> (the Week uses the households/<code>/items
+// subcollection under it — different paths, no collision), and its own
+// Siri drop-box at households/<code>/kinbox (the Week uses /inbox).
 const firebaseConfig = {
-  apiKey: "AIzaSyCSIqtnvJ1459lWFRvpFTQ6NDQaIZ2kkp4",
-  authDomain: "our-kitchen-be03f.firebaseapp.com",
-  databaseURL: "https://our-kitchen-be03f-default-rtdb.firebaseio.com",
-  projectId: "our-kitchen-be03f",
-  storageBucket: "our-kitchen-be03f.firebasestorage.app",
-  messagingSenderId: "679361781274",
-  appId: "1:679361781274:web:97a2453419badcb0cb7ba3"
+  apiKey: "AIzaSyDOGNa93lAi7lLzt_wpQl26QFQfWysIyvs",
+  authDomain: "our-week-bl-55477.firebaseapp.com",
+  projectId: "our-week-bl-55477",
+  storageBucket: "our-week-bl-55477.firebasestorage.app",
+  messagingSenderId: "579975197541",
+  appId: "1:579975197541:web:27e82873afb327da48a78c"
 };
 const FIREBASE_VERSION = "10.12.2";
 /* ============================================================ */
@@ -1453,7 +1457,7 @@ const DB = {
         if(fs.enableIndexedDbPersistence){ try{ await fs.enableIndexedDbPersistence(db); }catch(e){} }
         this._db = db;
         this.ref = fs.doc(db,'households',household);
-        this.inboxRef = fs.collection(db,'households',household,'inbox');   // Siri/Shortcuts drop-box
+        this.inboxRef = fs.collection(db,'households',household,'kinbox');   // Siri/Shortcuts drop-box (own path, so the Week's inbox never eats a grocery add)
         this._set = fs.setDoc; this._onSnap = fs.onSnapshot; this._del = fs.deleteDoc; this._tx = fs.runTransaction;
         this.mode='cloud';
       }catch(e){ console.error('Cloud sync failed, using this device only:',e); this.mode='local'; }
