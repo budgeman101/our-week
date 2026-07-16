@@ -300,6 +300,44 @@ const ROUTINE = {
     {id:"e2", text:"Pick up after the dogs (yard)", who:"both"},
   ],
 };
+/* =================== Sam — routine + toy rotation ================= *
+ *  Seed content for the child's side of the week. Toy sets are drawn
+ *  from Sam's real toys; the weekly grid is the family's own plan; the
+ *  rhythm + ideas menu are fixed reference. All text is rendered
+ *  through esc(), so "&" and the like are safe to store raw. */
+const SAM_NAME = "Sam";
+const SAM_SEED_VERSION = "v1";
+const SAM_CORE = "Always out: books, teddy, play kitchen, climbing set, ride-on train, monster trucks.";
+const SAM_SETS = [
+  { name:"Build It",         items:["Mega Bloks","Wooden blocks","Wooden alphabet blocks","Shape sorter"] },
+  { name:"Things That Go",   items:["Tonka fire truck","Small cars & trucks","Animal & dinosaur figures"] },
+  { name:"Music & Movement", items:["Toy drum kit","Xylophone","Tambourine, recorder & shaker","Bowling pins","Hula hoop"] },
+  { name:"Make & Create",    items:["Play-Doh + tools","Colouring books, markers & crayons","Alphabet pop-it","First-words boxes"] },
+];
+const SAM_GRID = [
+  { am:"Playground + nature walk",    pm:"Play-Doh, puzzles, read books" },
+  { am:"Beach — sand, rocks, sticks", pm:"Fort building, toy animals, obstacle course" },
+  { am:"Gymnastics (10:30)",          pm:"Quiet: colouring, sensory bin, books" },
+  { am:"Water park / splash pad",     pm:"Sports (ball games) + bubbles" },
+  { am:"Energyplex",                  pm:"Building blocks, train set, pretend play" },
+  { am:"Family hike or playground",   pm:"Baking, painting, dance party" },
+  { am:"Picnic at the beach or park", pm:"Fort movie afternoon, puzzles, early bedtime" },
+];
+const SAM_RHYTHM = [
+  ["8–9 am","Breakfast & get ready"], ["9–11:30","Morning outing"], ["11:30","Lunch"],
+  ["12:30–2","Rest / quiet time"], ["2–4 pm","Creative or sensory play"],
+  ["4–5 pm","Outdoor play or sports"], ["Evening","Dinner, books, bath, bed"],
+];
+const SAM_MENU = [
+  ["Outdoor","Playground · beach · splash pad · nature scavenger hunt · balance bike or scooter · soccer · tee-ball · low basketball hoop · kite · sidewalk chalk · bubbles · water table · gardening · collecting leaves & rocks · short hikes"],
+  ["Gross motor","Fort building · obstacle course · dance party · Simon Says · animal hops · kids' yoga · bean-bag toss · balloon volleyball"],
+  ["Creative","Play-Doh · finger painting · colouring · sticker books · dot markers · water painting · toddler scissors · pipe-cleaner crafts · stamps"],
+  ["Sensory","Kinetic sand · rice bin · water beads (close supervision) · shaving-cream play · mud kitchen · ice-cube rescue"],
+  ["Learning","Read 20–30 min daily · alphabet puzzle · counting games · shape hunt · matching cards · memory game · nursery rhymes · library story time"],
+  ["Pretend play","Grocery store · restaurant · doctor kit · construction site · dinosaur adventure · blanket-fort camping · toy car wash"],
+  ["Practical life","Help make breakfast · wash veg · fold towels · water plants · sweep · feed the dog (supervised) · wash toy cars · sort laundry"],
+];
+
 const SEED_VERSION = "planv1";
 const TPL_VERSION  = "tpl2";
 const SEED = [
@@ -609,6 +647,7 @@ function runSeeders(){
   if(pendingJoin()){ handleJoinPending(); autoRoll(); return; }
   if(pendingSetup() || namesDoc() || membersDoc()) seedNeutralIfNeeded();
   else { seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); }
+  seedSamIfNeeded();
   autoRoll(); migrateRemoveJohny(); syncTimezone();
 }
 /* once the cloud has answered: real family → pick who you are;
@@ -715,6 +754,96 @@ function stepEffectiveISO(s){
 function scheduledStepsFor(iso){
   return Object.values(items).filter(t=>t.kind==="pstep"&&!t._gone&&t.schedISO&&stepEffectiveISO(t)===iso)
     .sort(byOrder);
+}
+
+/* =========================== Sam ================================= *
+ *  The child's side of the week. A "toy set of the week" rotates by
+ *  itself — the set shown is derived from the week number, so it steps
+ *  on every Monday with no timer — and a Swap nudges it early. The
+ *  Mon–Sun plan and the toy sets are editable docs that sync; the
+ *  daily rhythm and ideas menu are fixed reference. Seeded only for
+ *  the original household; a new family gets an empty Sam tab to fill. */
+let samEditId=null, samEditFresh=false, samDayIdx=null;
+function toySets(){ return Object.values(items).filter(t=>t.kind==="toyset"&&!t._gone).sort(byOrder); }
+function toyRotDoc(){ const d=items["meta:toyrot"]; return (d && !d._gone) ? d : null; }
+function weeksBetweenKeys(a, b){
+  const da=new Date(a+"T00:00:00"), db=new Date(b+"T00:00:00");
+  return Math.round((db-da)/(7*24*60*60*1000));
+}
+/* which set is out for a given week: step through the sets by how many
+   weeks have passed since the start week, plus any manual swap offset */
+function toyIndexForWeek(weekKey){
+  const sets=toySets(); if(!sets.length) return -1;
+  const rot=toyRotDoc();
+  const start=(rot && rot.startWeekKey) || weekKey;
+  const off=(rot && rot.offset) || 0;
+  const n=weeksBetweenKeys(start, weekKey)+off;
+  return ((n % sets.length)+sets.length) % sets.length;
+}
+function toySetForWeek(weekKey){ const i=toyIndexForWeek(weekKey); return i<0?null:toySets()[i]; }
+function samPlan(day){ const d=items["samplan:"+day]; return (d && !d._gone) ? d : null; }
+function samClean(s, n){ return String(s||"").replace(/[<>]/g,"").trim().slice(0, n||24); }
+function isSamSeeded(t){ return !!t && (/^toyset:\d+$/.test(t.id) || /^samplan:/.test(t.id)); }
+
+function swapToySet(dir){
+  if(!toySets().length) return;
+  const rot=Object.assign({ id:"meta:toyrot", kind:"toyrot", startWeekKey:realWeekKey(), offset:0 }, toyRotDoc()||{});
+  rot.offset=(rot.offset||0)+(dir||1);
+  put(rot);
+  const s=toySetForWeek(curWeekKey());
+  render();
+  if(s) showToast("Toys out this week: "+s.name);
+}
+function addToySet(){
+  const sets=toySets();
+  const order=sets.length ? Math.max.apply(null, sets.map(x=>x.order||0))+1 : 0;
+  const id="toyset:"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  put({ id, kind:"toyset", name:"", items:[], order });
+  openSamSet(id, true);
+}
+function saveToySet(id, name, itemsText){
+  const t=items[id]; if(!t) return;
+  t.name=samClean(name, 28) || "Toy set";
+  t.items=String(itemsText||"").split("\n").map(s=>samClean(s, 60)).filter(Boolean).slice(0,40);
+  put(t);
+}
+function delToySet(id){
+  const t=items[id]; if(!t) return;
+  if(isSamSeeded(t)){ t._gone=true; put(t); } else drop(id);
+}
+function saveSamDay(day, am, pm){
+  put({ id:"samplan:"+day, kind:"samplan", day:Number(day), am:samClean(am,120), pm:samClean(pm,120) });
+}
+function seedSamIfNeeded(force){
+  const sentinel="meta:sam:"+SAM_SEED_VERSION;
+  if(!force && items[sentinel]) return;
+  if(tunedHousehold()){
+    SAM_SETS.forEach((s,i)=> seedDoc("toyset:"+i, { kind:"toyset", name:s.name, items:s.items.slice(), order:i }, force));
+    seedDoc("meta:toyrot", { kind:"toyrot", startWeekKey:realWeekKey(), offset:0 }, force);
+    SAM_GRID.forEach((g,i)=> seedDoc("samplan:"+i, { kind:"samplan", day:i, am:g.am, pm:g.pm }, force));
+  }
+  setMeta(sentinel); saveLocal();
+}
+/* the two Sam sheets live at module scope so addToySet can open one */
+function openSamSet(id, fresh){
+  if(!HAS_DOM){ samEditId=id; samEditFresh=!!fresh; return; }
+  const t=items[id]; if(!t) return;
+  samEditId=id; samEditFresh=!!fresh;
+  document.getElementById("samSetTitle").textContent = fresh ? "New toy set" : "Edit toy set";
+  document.getElementById("samSetName").value=t.name||"";
+  document.getElementById("samSetItems").value=(t.items||[]).join("\n");
+  document.getElementById("samSetSheet").classList.add("show");
+  setTimeout(()=>document.getElementById("samSetName").focus(),60);
+}
+function openSamDay(day){
+  if(!HAS_DOM) return;
+  samDayIdx=Number(day);
+  const p=samPlan(day)||{};
+  document.getElementById("samDayTitle").textContent=DAY_FULL[day]+" — "+SAM_NAME;
+  document.getElementById("samDayAM").value=p.am||"";
+  document.getElementById("samDayPM").value=p.pm||"";
+  document.getElementById("samDaySheet").classList.add("show");
+  setTimeout(()=>document.getElementById("samDayAM").focus(),60);
 }
 
 /* ============================== mutators ========================== */
@@ -1538,9 +1667,11 @@ function render(){
   show("viewList", view==="list");
   show("viewProjects", view==="projects");
   show("viewNotes", view==="notes");
+  show("viewSam", view==="sam");
   if(view==="week") renderWeek();
   else if(view==="list") renderList();
   else if(view==="projects") renderProjects();
+  else if(view==="sam") renderSam();
   else renderNotes();
 }
 function updateTabs(){
@@ -1592,6 +1723,8 @@ function renderWeek(){
     </div>
 
     ${peopleCardHTML(shifts)}
+
+    ${samMiniHTML()}
 
     <div class="card">
       <div class="ctitle"><svg><use href="#i-tool"/></svg>To-dos</div>
@@ -1758,6 +1891,77 @@ function renderNotes(){
   document.getElementById("notesBody").innerHTML = html;
 }
 
+/* ------------------------------ Sam view -------------------------- */
+function samSetCardHTML(){
+  const wk=curWeekKey();
+  const sets=toySets();
+  if(!sets.length){
+    return `<div class="card"><div class="ctitle"><svg><use href="#i-rotate"/></svg>Toys this week</div>
+      <p class="emptyhint">No toy sets yet — add a few and one will be "out" each week.</p>
+      <button class="bigadd" data-act="samadd"><svg width="18" height="18"><use href="#i-plus"/></svg> Add a toy set</button></div>`;
+  }
+  const idx=toyIndexForWeek(wk);
+  const cur=sets[idx];
+  const next=sets[(idx+1)%sets.length];
+  const chips = cur.items.length ? cur.items.map(it=>`<span class="carechip">${esc(it)}</span>`).join("")
+                                 : '<span class="emptyhint">No toys listed yet — tap Edit this set.</span>';
+  const allSets = sets.map((s,i)=>`<li><div class="item ${i===idx?'both':''}" data-id="${s.id}">
+      <div class="lab"><span class="txt" data-act="samedit" data-id="${s.id}">${esc(s.name||"Untitled set")}${i===idx?' <span class="apptrep">out now</span>':''}</span>
+        <span class="sub">${esc(s.items.join(" · "))||"—"}</span></div>
+      <button class="editb" data-act="samedit" data-id="${s.id}" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
+    </div></li>`).join("");
+  return `<div class="card">
+    <div class="ctitle"><svg><use href="#i-rotate"/></svg>Toys this week
+      <button class="swapbtn" data-act="samswap"><svg><use href="#i-rotate"/></svg>Swap</button></div>
+    <div class="setout">${esc(cur.name||"Untitled set")}</div>
+    <div class="carechips" style="margin-top:8px">${chips}</div>
+    <div class="setnext">Next week → ${esc(next.name||"Untitled set")}</div>
+    <div class="samcore">${esc(SAM_CORE)}</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px">
+      <button class="addmini left" data-act="samedit" data-id="${cur.id}"><svg><use href="#i-edit"/></svg>Edit this set</button>
+      <button class="addmini left" data-act="samadd"><svg><use href="#i-plus"/></svg>Add a set</button>
+    </div>
+    <div class="grp" style="margin-top:14px">All sets</div>
+    <ul class="items">${allSets}</ul>
+  </div>`;
+}
+function samWeekCardHTML(){
+  const rows=DAY_FULL.map((dn,i)=>{
+    const p=samPlan(i);
+    const today = isThisWeek() && i===todayMonIndex();
+    return `<div class="samday ${today?'today':''}" data-act="samday" data-day="${i}">
+      <div class="sd">${DAY_SHORT[i]}</div>
+      <div class="sb"><div class="am">${p&&p.am?esc(p.am):'<span class="ph">tap to add</span>'}</div>
+        ${p&&p.pm?`<div class="pm">${esc(p.pm)}</div>`:''}</div></div>`;
+  }).join("");
+  return `<div class="card"><div class="ctitle"><svg><use href="#i-checklist"/></svg>This week's plan</div><div class="samweek">${rows}</div></div>`;
+}
+function samRhythmCardHTML(){
+  return `<div class="card"><div class="ctitle"><svg><use href="#i-clock"/></svg>A gentle daily rhythm</div>
+    <ul class="samrhythm">${SAM_RHYTHM.map(r=>`<li><span class="rt">${esc(r[0])}</span><span>${esc(r[1])}</span></li>`).join("")}</ul></div>`;
+}
+function samMenuCardHTML(){
+  return `<div class="card sammenu"><div class="ctitle"><svg><use href="#i-book"/></svg>Ideas to rotate</div>
+    ${SAM_MENU.map(m=>`<div class="grp">${esc(m[0])}</div><div class="mline">${esc(m[1])}</div>`).join("")}</div>`;
+}
+function renderSam(){
+  if(!HAS_DOM) return;
+  document.getElementById("samBody").innerHTML =
+    `<div class="dayhead"><div class="dtitle">${esc(SAM_NAME)}'s week</div></div>`
+    + samSetCardHTML() + samWeekCardHTML() + samRhythmCardHTML() + samMenuCardHTML();
+}
+/* the compact Sam card on the Week view — today's plan + this week's set */
+function samMiniHTML(){
+  const p=samPlan(selDay);
+  const cur=toySetForWeek(curWeekKey());
+  if(!p && !cur) return "";
+  return `<div class="card samcard" data-act="gosam">
+    <div class="ctitle"><svg><use href="#i-child"/></svg>${esc(SAM_NAME)}<span class="apptrep" style="margin-left:auto; text-transform:none; letter-spacing:0">tap for more →</span></div>
+    ${p?`<div class="samline"><b>Morning</b>${p.am?esc(p.am):"—"}</div><div class="samline"><b>Afternoon</b>${p.pm?esc(p.pm):"—"}</div>`:""}
+    ${cur?`<div class="samtoys"><svg><use href="#i-rotate"/></svg>Toys out: <b>${esc(cur.name)}</b></div>`:""}
+  </div>`;
+}
+
 /* ============================== wiring =========================== */
 function wireWeek(){
   document.querySelectorAll("#days .daypill").forEach(el=>{
@@ -1857,6 +2061,7 @@ if(HAS_DOM){
   document.getElementById("day").addEventListener("click", e=>{
     const el=e.target.closest("[data-act]"); if(!el) return;
     const act=el.dataset.act;
+    if(act==="gosam"){ view="sam"; render(); return; }
     if(act==="addtpl"){ const sc=el.dataset.scope; addTpl(el.dataset.sec, sc==="daily"?"daily":Number(sc), el.dataset.check==="1"); return; }
     if(act==="addcare"){ addCare(Number(el.dataset.scope), el.dataset.mid); return; }
     if(act==="addappt"){ addAppt(); return; }
@@ -2118,6 +2323,42 @@ if(HAS_DOM){
     overlayPerson.classList.remove("show"); render();
   };
   document.getElementById("psClose").onclick=()=>overlayPerson.classList.remove("show");
+
+  /* ---- Sam tab: swap / add / edit a set, tap a day to edit it ---- */
+  document.getElementById("viewSam").addEventListener("click", e=>{
+    const el=e.target.closest("[data-act]"); if(!el) return;
+    const act=el.dataset.act;
+    if(act==="samswap"){ swapToySet(1); return; }
+    if(act==="samadd"){ addToySet(); return; }
+    if(act==="samedit"){ openSamSet(el.dataset.id); return; }
+    if(act==="samday"){ openSamDay(el.dataset.day); return; }
+  });
+  document.getElementById("samSetSave").onclick=()=>{
+    if(!samEditId) return;
+    saveToySet(samEditId, document.getElementById("samSetName").value, document.getElementById("samSetItems").value);
+    samEditId=null; samEditFresh=false;
+    document.getElementById("samSetSheet").classList.remove("show"); render();
+  };
+  document.getElementById("samSetDelete").onclick=()=>{
+    if(samEditId && confirm("Delete this toy set? The weekly rotation will use whatever sets remain.")) delToySet(samEditId);
+    samEditId=null; samEditFresh=false;
+    document.getElementById("samSetSheet").classList.remove("show"); render();
+  };
+  document.getElementById("samSetClose").onclick=()=>{
+    if(samEditFresh && samEditId){ const t=items[samEditId]; if(t && !t.name && !(t.items&&t.items.length)) delToySet(samEditId); }
+    samEditId=null; samEditFresh=false;
+    document.getElementById("samSetSheet").classList.remove("show"); render();
+  };
+  document.getElementById("samSetName").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("samSetItems").focus(); });
+  document.getElementById("samDaySave").onclick=()=>{
+    if(samDayIdx==null) return;
+    saveSamDay(samDayIdx, document.getElementById("samDayAM").value, document.getElementById("samDayPM").value);
+    samDayIdx=null;
+    document.getElementById("samDaySheet").classList.remove("show"); render();
+  };
+  document.getElementById("samDayClose").onclick=()=>{ samDayIdx=null; document.getElementById("samDaySheet").classList.remove("show"); };
+  document.getElementById("samDayAM").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("samDayPM").focus(); });
+  document.getElementById("samDayPM").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("samDaySave").click(); });
 
   /* settings + welcome */
   const overlaySettings=document.getElementById("settings");
@@ -2501,6 +2742,21 @@ if(!HAS_DOM){
     console.log("skip doesn't touch next week:", shiftsForDate("2026-08-10").some(s=>s.id==="shift:reg:mon"));
     toggleShiftSkip("shift:reg:mon");
     console.log("un-skip restores it:", shiftsForDate(monISO).some(s=>s.id==="shift:reg:mon"));
+  })();
+
+  /* Sam: toy sets + weekly plan seed; the set rotates by week + swaps */
+  seedSamIfNeeded();
+  console.log("Sam seeds 4 toy sets + 7 plan days:", toySets().length===4 && Object.values(items).filter(t=>t.kind==="samplan").length===7);
+  (function(){
+    const start=items["meta:toyrot"].startWeekKey;
+    const wkAt=n=>{ const d=new Date(start+"T00:00:00"); d.setDate(d.getDate()+7*n); return weekKeyOf(d); };
+    console.log("Sam toy set advances weekly:", toyIndexForWeek(wkAt(0))===0 && toyIndexForWeek(wkAt(1))===1 && toyIndexForWeek(wkAt(2))===2);
+    console.log("Sam rotation wraps after 4 weeks:", toyIndexForWeek(wkAt(4))===toyIndexForWeek(wkAt(0)));
+    const before=toyIndexForWeek(wkAt(3));
+    swapToySet(1);
+    console.log("Sam swap advances the set:", toyIndexForWeek(wkAt(3))===((before+1)%4));
+    saveSamDay(2, "Test AM", "Test PM");
+    console.log("Sam day plan saves:", samPlan(2).am==="Test AM" && samPlan(2).pm==="Test PM");
   })();
 
   /* project sorting */

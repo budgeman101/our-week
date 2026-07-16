@@ -67,8 +67,8 @@
   .sheet .pill.synced{background:var(--green); color:#fff}
 
   /* tabs */
-  .tabs{display:flex; gap:6px; margin:12px 0 6px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px}
-  .tabs button{flex:1; border:0; background:transparent; color:var(--muted); font-weight:700; font-size:.82rem; padding:8px 6px; border-radius:9px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px}
+  .tabs{display:flex; gap:4px; margin:12px 0 6px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px}
+  .tabs button{flex:1; min-width:0; border:0; background:transparent; color:var(--muted); font-weight:700; font-size:.8rem; padding:8px 3px; border-radius:9px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:5px}
   .tabs button svg{width:15px; height:15px}
   .tabs button.on{background:var(--accent); color:#fff}
   .badge{background:var(--lindsay); color:#fff; font-size:.66rem; min-width:17px; height:17px; border-radius:999px; padding:0 5px; display:inline-flex; align-items:center; justify-content:center; font-weight:800}
@@ -302,6 +302,40 @@
   .sheet .edremind label{display:inline-flex; align-items:center; gap:8px}
   .sheet .edremind select{border:1px solid var(--line); border-radius:9px; padding:8px; font-size:15px}
 
+  /* Sam — toddler routine + toy rotation */
+  .sheet textarea{width:100%; border:1px solid var(--line); border-radius:10px; padding:12px; font-size:16px; font-family:inherit; resize:vertical; margin-top:8px}
+  .samfld{display:block; font-size:.8rem; font-weight:700; color:var(--muted); margin-top:12px}
+  .samfld input{margin-top:5px}
+  .samcard{cursor:pointer}
+  .samcard:active{transform:scale(.997)}
+  .samcard .apptrep{color:var(--faint); font-weight:700}
+  .samline{font-size:.94rem; margin:3px 0}
+  .samline b{color:var(--muted); font-weight:700; font-size:.66rem; text-transform:uppercase; letter-spacing:.04em; margin-right:7px}
+  .samtoys{margin-top:9px; font-size:.92rem; display:flex; align-items:center; gap:6px; color:var(--accent)}
+  .samtoys svg{width:16px; height:16px; flex:none}
+  .samtoys b{color:var(--ink)}
+  .setout{font-size:1.15rem; font-weight:800; color:var(--accent-d)}
+  .setnext{font-size:.76rem; color:var(--faint); margin-top:9px}
+  .samcore{font-size:.8rem; color:var(--muted); background:var(--accent-soft); border:1px solid #e2d5fa; border-radius:10px; padding:8px 11px; margin-top:10px; line-height:1.5}
+  .swapbtn{background:var(--accent); color:#fff; border:0; border-radius:999px; padding:6px 12px; font-weight:700; font-size:.74rem; cursor:pointer; display:inline-flex; align-items:center; gap:5px}
+  .swapbtn svg{width:14px; height:14px}
+  .swapbtn:active{transform:scale(.96)}
+  .samweek{display:flex; flex-direction:column}
+  .samday{display:flex; gap:11px; align-items:flex-start; padding:9px 4px; border-top:1px solid var(--line-soft); cursor:pointer; border-radius:9px}
+  .samday:first-child{border-top:none}
+  .samday:active{opacity:.6}
+  .samday.today{background:var(--today)}
+  .samday .sd{flex:0 0 40px; font-weight:800; font-size:.7rem; letter-spacing:.03em; text-transform:uppercase; color:var(--faint); padding-top:3px}
+  .samday.today .sd{color:var(--accent)}
+  .samday .sb{flex:1; min-width:0}
+  .samday .sb .am{font-size:.92rem; line-height:1.4}
+  .samday .sb .pm{font-size:.84rem; color:var(--muted); margin-top:2px; line-height:1.4}
+  .samrhythm{list-style:none; margin:0; padding:0}
+  .samrhythm li{display:flex; gap:12px; font-size:.9rem; padding:6px 2px; border-top:1px solid var(--line-soft)}
+  .samrhythm li:first-child{border-top:none}
+  .samrhythm .rt{flex:0 0 86px; color:var(--accent); font-weight:700; font-size:.82rem}
+  .sammenu .mline{font-size:.88rem; color:var(--ink); padding:2px 2px 4px; line-height:1.55}
+
   /* printable week */
   #printSheet{display:none}
   @media print{
@@ -368,6 +402,7 @@
     <button data-view="list"><svg><use href="#i-list"/></svg>List <span class="badge" id="listBadge" style="display:none"></span></button>
     <button data-view="projects"><svg><use href="#i-folder"/></svg>Projects</button>
     <button data-view="notes"><svg><use href="#i-note"/></svg>Notes <span class="badge" id="notesBadge" style="display:none"></span></button>
+    <button data-view="sam"><svg><use href="#i-child"/></svg>Sam</button>
   </div>
 
   <section id="viewWeek">
@@ -410,6 +445,10 @@
       <button id="notePost">Post</button>
     </div>
     <div id="notesBody"></div>
+  </section>
+
+  <section id="viewSam" style="display:none">
+    <div id="samBody"></div>
   </section>
 
   <footer>
@@ -567,6 +606,31 @@
     <button class="btn sec" id="edSkipWeek" style="display:none">Skip this week</button>
     <button class="btn sec" id="edDelete">Delete</button>
     <button class="btn sec" id="edCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Sam: edit a toy set -->
+<div class="overlay" id="samSetSheet">
+  <div class="sheet">
+    <h2><svg width="19" height="19"><use href="#i-rotate"/></svg> <span id="samSetTitle">Toy set</span></h2>
+    <p>Name the set, then list the toys — one per line.</p>
+    <input type="text" id="samSetName" placeholder="Set name — e.g. Build It" autocomplete="off" />
+    <textarea id="samSetItems" rows="6" placeholder="One toy per line…"></textarea>
+    <button class="btn" id="samSetSave">Save</button>
+    <button class="btn sec" id="samSetDelete">Delete this set</button>
+    <button class="btn sec" id="samSetClose">Cancel</button>
+  </div>
+</div>
+
+<!-- Sam: edit a day's plan -->
+<div class="overlay" id="samDaySheet">
+  <div class="sheet">
+    <h2><svg width="19" height="19"><use href="#i-child"/></svg> <span id="samDayTitle">Sam's day</span></h2>
+    <p>The morning outing and afternoon activity for this day.</p>
+    <label class="samfld">Morning <input type="text" id="samDayAM" autocomplete="off" /></label>
+    <label class="samfld">Afternoon <input type="text" id="samDayPM" autocomplete="off" /></label>
+    <button class="btn" id="samDaySave">Save</button>
+    <button class="btn sec" id="samDayClose">Cancel</button>
   </div>
 </div>
 
