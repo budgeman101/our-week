@@ -308,18 +308,18 @@ const ROUTINE = {
 const SAM_NAME = "Sam";
 const SAM_SEED_VERSION = "v1";
 const SAM_CORE = "Always out: books, teddy, play kitchen, climbing set, ride-on train, monster trucks.";
+const SAM_CRAFT = "Craft supplies — also always out, for the creative & quiet afternoons: Play-Doh, colouring, paint, sensory bins, puzzles.";
 const SAM_SETS = [
   { name:"Build It",         items:["Mega Bloks","Wooden blocks","Wooden alphabet blocks","Shape sorter"] },
   { name:"Things That Go",   items:["Tonka fire truck","Small cars & trucks","Animal & dinosaur figures"] },
   { name:"Music & Movement", items:["Toy drum kit","Xylophone","Tambourine, recorder & shaker","Bowling pins","Hula hoop"] },
-  { name:"Make & Create",    items:["Play-Doh + tools","Colouring books, markers & crayons","Alphabet pop-it","First-words boxes"] },
 ];
 const SAM_GRID = [
   { am:"Playground + nature walk",    pm:"Play-Doh, puzzles, read books" },
-  { am:"Beach — sand, rocks, sticks", pm:"Fort building, toy animals, obstacle course" },
+  { am:"Beach — sand, rocks, sticks", pm:"Fort + obstacle course, then this week's toys" },
   { am:"Gymnastics (10:30)",          pm:"Quiet: colouring, sensory bin, books" },
   { am:"Water park / splash pad",     pm:"Sports (ball games) + bubbles" },
-  { am:"Energyplex",                  pm:"Building blocks, train set, pretend play" },
+  { am:"Energyplex",                  pm:"This week's toys, train + pretend play" },
   { am:"Family hike or playground",   pm:"Baking, painting, dance party" },
   { am:"Picnic at the beach or park", pm:"Fort movie afternoon, puzzles, early bedtime" },
 ];
@@ -648,7 +648,7 @@ function runSeeders(){
   if(pendingSetup() || namesDoc() || membersDoc()) seedNeutralIfNeeded();
   else { seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); }
   seedSamIfNeeded();
-  autoRoll(); migrateRemoveJohny(); syncTimezone();
+  autoRoll(); migrateRemoveJohny(); migrateSamV2(); syncTimezone();
 }
 /* once the cloud has answered: real family → pick who you are;
    nothing there → the code is wrong, back to the welcome card */
@@ -823,6 +823,21 @@ function seedSamIfNeeded(force){
     SAM_GRID.forEach((g,i)=> seedDoc("samplan:"+i, { kind:"samplan", day:i, am:g.am, pm:g.pm }, force));
   }
   setMeta(sentinel); saveLocal();
+}
+/* v2 (2026-07-16): art/craft supplies left the rotation to live in an
+   always-out craft cupboard, so the plan's creative afternoons work every
+   week. Retire the old "Make & Create" set and reword the two afternoons
+   that named a rotating toy — only where a family hasn't already changed them. */
+function migrateSamV2(){
+  if(items["meta:mig:samv2"]) return;
+  if(tunedHousehold() && items["toyset:3"] && !items["toyset:3"]._gone) drop("toyset:3");
+  const fixes={ "1":{old:"Fort building, toy animals, obstacle course", pm:"Fort + obstacle course, then this week's toys"},
+                "4":{old:"Building blocks, train set, pretend play",     pm:"This week's toys, train + pretend play"} };
+  Object.keys(fixes).forEach(d=>{
+    const doc=items["samplan:"+d], f=fixes[d];
+    if(doc && !doc._gone && doc.pm===f.old){ doc.pm=f.pm; put(doc); }
+  });
+  setMeta("meta:mig:samv2"); saveLocal();
 }
 /* the two Sam sheets live at module scope so addToySet can open one */
 function openSamSet(id, fresh){
@@ -1917,6 +1932,7 @@ function samSetCardHTML(){
     <div class="carechips" style="margin-top:8px">${chips}</div>
     <div class="setnext">Next week → ${esc(next.name||"Untitled set")}</div>
     <div class="samcore">${esc(SAM_CORE)}</div>
+    <div class="samcore">${esc(SAM_CRAFT)}</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px">
       <button class="addmini left" data-act="samedit" data-id="${cur.id}"><svg><use href="#i-edit"/></svg>Edit this set</button>
       <button class="addmini left" data-act="samadd"><svg><use href="#i-plus"/></svg>Add a set</button>
@@ -2746,17 +2762,23 @@ if(!HAS_DOM){
 
   /* Sam: toy sets + weekly plan seed; the set rotates by week + swaps */
   seedSamIfNeeded();
-  console.log("Sam seeds 4 toy sets + 7 plan days:", toySets().length===4 && Object.values(items).filter(t=>t.kind==="samplan").length===7);
+  console.log("Sam seeds 3 toy sets + 7 plan days:", toySets().length===3 && Object.values(items).filter(t=>t.kind==="samplan").length===7);
   (function(){
     const start=items["meta:toyrot"].startWeekKey;
     const wkAt=n=>{ const d=new Date(start+"T00:00:00"); d.setDate(d.getDate()+7*n); return weekKeyOf(d); };
     console.log("Sam toy set advances weekly:", toyIndexForWeek(wkAt(0))===0 && toyIndexForWeek(wkAt(1))===1 && toyIndexForWeek(wkAt(2))===2);
-    console.log("Sam rotation wraps after 4 weeks:", toyIndexForWeek(wkAt(4))===toyIndexForWeek(wkAt(0)));
+    console.log("Sam rotation wraps after 3 weeks:", toyIndexForWeek(wkAt(3))===toyIndexForWeek(wkAt(0)));
     const before=toyIndexForWeek(wkAt(3));
     swapToySet(1);
-    console.log("Sam swap advances the set:", toyIndexForWeek(wkAt(3))===((before+1)%4));
+    console.log("Sam swap advances the set:", toyIndexForWeek(wkAt(3))===((before+1)%3));
     saveSamDay(2, "Test AM", "Test PM");
     console.log("Sam day plan saves:", samPlan(2).am==="Test AM" && samPlan(2).pm==="Test PM");
+    // v2 migration: retire an old Make & Create set + reword the toy-named afternoons
+    items["toyset:3"]={id:"toyset:3",kind:"toyset",name:"Make & Create",items:["Play-Doh + tools"],order:3};
+    items["samplan:1"]={id:"samplan:1",kind:"samplan",day:1,am:"Beach — sand, rocks, sticks",pm:"Fort building, toy animals, obstacle course"};
+    delete items["meta:mig:samv2"];
+    migrateSamV2();
+    console.log("Sam v2 retires art set + rewords Tue:", !toySets().some(s=>s.name==="Make & Create") && /this week's toys/i.test(samPlan(1).pm));
   })();
 
   /* project sorting */
