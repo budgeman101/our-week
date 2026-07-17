@@ -307,19 +307,20 @@ const ROUTINE = {
  *  through esc(), so "&" and the like are safe to store raw. */
 const SAM_NAME = "Sam";
 const SAM_SEED_VERSION = "v1";
-const SAM_CORE = "Always out: books, teddy, play kitchen, climbing set, ride-on train, monster trucks.";
+const SAM_CORE = "Always out: books, teddy, drum kit, climbing set, monster trucks.";
 const SAM_CRAFT = "Craft supplies — also always out, for the creative & quiet afternoons: Play-Doh, colouring, paint, sensory bins, puzzles.";
 const SAM_SETS = [
   { name:"Build It",         items:["Mega Bloks","Wooden blocks","Wooden alphabet blocks","Shape sorter"] },
-  { name:"Things That Go",   items:["Tonka fire truck","Small cars & trucks","Animal & dinosaur figures"] },
-  { name:"Music & Movement", items:["Toy drum kit","Xylophone","Tambourine, recorder & shaker","Bowling pins","Hula hoop"] },
+  { name:"Things That Go",   items:["Tonka fire truck","Small cars & trucks","Animal & dinosaur figures","Ride-on train"] },
+  { name:"Music & Movement", items:["Xylophone","Tambourine, recorder & shaker","Bowling pins","Hula hoop"] },
+  { name:"Kitchen",          items:["Play kitchen","Pots & pans","Play food","Utensils"] },
 ];
 const SAM_GRID = [
   { am:"Playground + nature walk",    pm:"Play-Doh, puzzles, read books" },
   { am:"Beach — sand, rocks, sticks", pm:"Fort + obstacle course, then this week's toys" },
   { am:"Gymnastics (10:30)",          pm:"Quiet: colouring, sensory bin, books" },
   { am:"Water park / splash pad",     pm:"Sports (ball games) + bubbles" },
-  { am:"Energyplex",                  pm:"This week's toys, train + pretend play" },
+  { am:"Energyplex",                  pm:"This week's toys + pretend play" },
   { am:"Family hike or playground",   pm:"Baking, painting, dance party" },
   { am:"Picnic at the beach or park", pm:"Fort movie afternoon, puzzles, early bedtime" },
 ];
@@ -648,7 +649,7 @@ function runSeeders(){
   if(pendingSetup() || namesDoc() || membersDoc()) seedNeutralIfNeeded();
   else { seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); }
   seedSamIfNeeded();
-  autoRoll(); migrateRemoveJohny(); migrateSamV2(); syncTimezone();
+  autoRoll(); migrateRemoveJohny(); migrateSamV2(); migrateSamV3(); syncTimezone();
 }
 /* once the cloud has answered: real family → pick who you are;
    nothing there → the code is wrong, back to the welcome card */
@@ -838,6 +839,25 @@ function migrateSamV2(){
     if(doc && !doc._gone && doc.pm===f.old){ doc.pm=f.pm; put(doc); }
   });
   setMeta("meta:mig:samv2"); saveLocal();
+}
+/* v3 (2026-07-16): after seeing the real space, Ben moved the ride-on train
+   and the play kitchen INTO the rotation (train folds into the vehicles set;
+   the kitchen + its food/pots/utensils becomes its own set) and pulled the
+   floor-standing drum kit OUT to stay always-out. Edit-safe + idempotent. */
+function migrateSamV3(){
+  if(items["meta:mig:samv3"]) return;
+  if(tunedHousehold()){
+    const tg=items["toyset:1"];
+    if(tg && !tg._gone && Array.isArray(tg.items) && tg.items.indexOf("Ride-on train")<0){ tg.items=tg.items.concat(["Ride-on train"]); put(tg); }
+    const mus=items["toyset:2"];
+    if(mus && !mus._gone && Array.isArray(mus.items) && mus.items.indexOf("Toy drum kit")>=0){ mus.items=mus.items.filter(x=>x!=="Toy drum kit"); put(mus); }
+    if(!items["toyset:3"] || items["toyset:3"]._gone){
+      put({ id:"toyset:3", kind:"toyset", name:"Kitchen", items:["Play kitchen","Pots & pans","Play food","Utensils"], order:3 });
+    }
+    const fri=items["samplan:4"];
+    if(fri && !fri._gone && fri.pm==="This week's toys, train + pretend play"){ fri.pm="This week's toys + pretend play"; put(fri); }
+  }
+  setMeta("meta:mig:samv3"); saveLocal();
 }
 /* the two Sam sheets live at module scope so addToySet can open one */
 function openSamSet(id, fresh){
@@ -2762,15 +2782,15 @@ if(!HAS_DOM){
 
   /* Sam: toy sets + weekly plan seed; the set rotates by week + swaps */
   seedSamIfNeeded();
-  console.log("Sam seeds 3 toy sets + 7 plan days:", toySets().length===3 && Object.values(items).filter(t=>t.kind==="samplan").length===7);
+  console.log("Sam seeds 4 toy sets + 7 plan days:", toySets().length===4 && Object.values(items).filter(t=>t.kind==="samplan").length===7);
   (function(){
     const start=items["meta:toyrot"].startWeekKey;
     const wkAt=n=>{ const d=new Date(start+"T00:00:00"); d.setDate(d.getDate()+7*n); return weekKeyOf(d); };
     console.log("Sam toy set advances weekly:", toyIndexForWeek(wkAt(0))===0 && toyIndexForWeek(wkAt(1))===1 && toyIndexForWeek(wkAt(2))===2);
-    console.log("Sam rotation wraps after 3 weeks:", toyIndexForWeek(wkAt(3))===toyIndexForWeek(wkAt(0)));
-    const before=toyIndexForWeek(wkAt(3));
+    console.log("Sam rotation wraps after 4 weeks:", toyIndexForWeek(wkAt(4))===toyIndexForWeek(wkAt(0)));
+    const before=toyIndexForWeek(wkAt(4));
     swapToySet(1);
-    console.log("Sam swap advances the set:", toyIndexForWeek(wkAt(3))===((before+1)%3));
+    console.log("Sam swap advances the set:", toyIndexForWeek(wkAt(4))===((before+1)%4));
     saveSamDay(2, "Test AM", "Test PM");
     console.log("Sam day plan saves:", samPlan(2).am==="Test AM" && samPlan(2).pm==="Test PM");
     // v2 migration: retire an old Make & Create set + reword the toy-named afternoons
@@ -2779,6 +2799,15 @@ if(!HAS_DOM){
     delete items["meta:mig:samv2"];
     migrateSamV2();
     console.log("Sam v2 retires art set + rewords Tue:", !toySets().some(s=>s.name==="Make & Create") && /this week's toys/i.test(samPlan(1).pm));
+    // v3 migration: from a v2-shaped state — train joins vehicles, drum kit leaves music, kitchen becomes its own set
+    items["toyset:1"]={id:"toyset:1",kind:"toyset",name:"Things That Go",items:["Tonka fire truck","Small cars & trucks"],order:1};
+    items["toyset:2"]={id:"toyset:2",kind:"toyset",name:"Music & Movement",items:["Toy drum kit","Xylophone","Bowling pins"],order:2};
+    delete items["toyset:3"]; delete items["meta:mig:samv3"];
+    migrateSamV3();
+    console.log("Sam v3 train+kitchen in, drum out:",
+      items["toyset:1"].items.indexOf("Ride-on train")>=0 &&
+      items["toyset:2"].items.indexOf("Toy drum kit")<0 &&
+      !!items["toyset:3"] && items["toyset:3"].name==="Kitchen");
   })();
 
   /* project sorting */
