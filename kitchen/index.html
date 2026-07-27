@@ -1152,6 +1152,9 @@ const UNITS = [
 ];
 const UNIT_FAMILY = {g:'mass', kg:'mass', ml:'vol', L:'vol'};
 const UNIT_TOBASE = {g:1, kg:1000, ml:1, L:1000};   // amount × factor = base (grams / millilitres)
+// Countable units are interchangeable: 1 dozen = 12 each; "ea"/"pcs"/"pieces" are just "each".
+// Lets a meal that lists "3 each" of eggs draw down a pantry stocked as "2 dozen".
+const COUNT_TOBASE = {each:1, ea:1, pcs:1, pieces:1, dozen:12};
 const UNIT_STEP   = Object.fromEntries(UNITS.map(u=>[u.id,u.step]));
 
 /* ---------- PACK SIZES (buy-in-packs) ----------
@@ -1278,6 +1281,8 @@ function convertAmount(amt,from,to){
   if(from===to) return amt;
   const ff=UNIT_FAMILY[from], tf=UNIT_FAMILY[to];
   if(ff && ff===tf) return amt*UNIT_TOBASE[from]/UNIT_TOBASE[to];
+  const cf=COUNT_TOBASE[from], ct=COUNT_TOBASE[to];
+  if(cf!=null && ct!=null) return amt*cf/ct;   // each ⇄ ea ⇄ pieces ⇄ dozen
   return null;
 }
 // take `need` (in needUnit) from `have` (in haveUnit). Returns null if incompatible.
@@ -2974,6 +2979,17 @@ function extractRecipeArray(text){
   if(s!==-1 && e!==-1 && e>s){ const a=tryParseRecipes(t.slice(s,e+1)); if(a) return a; }
   return null;
 }
+// A meal-plan import can pin each recipe to a day. Accept an explicit ISO date
+// ("2026-07-27") — that wins — or a weekday name ("Monday"/"mon"), which maps to
+// whichever week the Meals tab is currently showing. '' means library-only.
+function importPlaceDate(rec){
+  const raw=String((rec&&(rec.date||rec.day))||'').trim();
+  if(!raw) return '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const k=raw.toLowerCase().slice(0,3);
+  const idx=DAY_NAMES.findIndex(n=>n.toLowerCase().slice(0,3)===k);
+  return idx>=0 ? iso(addDays(weekStart, idx)) : '';
+}
 function clampImportedRecipe(rec){
   rec=rec||{};
   const name=String(rec.name||'').trim(); if(!name) return null;
@@ -2988,7 +3004,7 @@ function clampImportedRecipe(rec){
   const steps=(Array.isArray(rec.steps)?rec.steps:[]).map(s=>String(s||'').trim()).filter(Boolean).slice(0,50);
   const cookMins=Math.max(0,parseInt(rec.cookMins,10)||0);
   const servings=Math.max(0,parseInt(rec.servings,10)||0);
-  return {name,slot,ingredients:ings,steps,cookMins,servings};
+  return {name,slot,ingredients:ings,steps,cookMins,servings,placeDate:importPlaceDate(rec)};
 }
 // Add an imported recipe, or update the existing one with the same name.
 function addImportedRecipe(c){
@@ -3008,19 +3024,38 @@ function addImportedRecipe(c){
 }
 function openPasteRecipe(){ const t=$('#pasteRecipeText'); if(t) t.value=''; $('#pasteRecipeOverlay').classList.add('show'); }
 function closePasteRecipe(){ $('#pasteRecipeOverlay').classList.remove('show'); }
+// Drop an imported+clamped recipe onto a specific day's meal list. Skips if an
+// identical meal (same name + slot) is already on that day, so re-pasting the
+// same plan never doubles up. Returns true only when a new meal was placed.
+function placeMealOnDate(c){
+  const key=c.placeDate; if(!key) return false;
+  state.meals[key]=state.meals[key]||[];
+  const dup=live(state.meals[key]).some(m=>m.slot===c.slot && String(m.name||'').toLowerCase()===String(c.name||'').toLowerCase());
+  if(dup) return false;
+  state.meals[key].push({id:uid(),name:c.name,slot:c.slot,ingredients:(c.ingredients||[]).map(g=>({...g})),steps:(c.steps||[]).slice(),updatedAt:now()});
+  return true;
+}
 function doPasteRecipeImport(){
   const text=$('#pasteRecipeText').value||'';
   if(!text.trim()){ toast('Paste the AI’s reply first'); return; }
   const arr=extractRecipeArray(text);
   if(!arr || !arr.length){ toast('Couldn’t find recipes — make sure you include the JSON block'); return; }
-  let added=0, updated=0;
-  arr.forEach(r=>{ const c=clampImportedRecipe(r); if(!c) return; const res=addImportedRecipe(c); if(res==='added') added++; else updated++; });
+  let added=0, updated=0, placed=0, firstKey='';
+  arr.forEach(r=>{
+    const c=clampImportedRecipe(r); if(!c) return;
+    const res=addImportedRecipe(c); if(res==='added') added++; else updated++;
+    if(placeMealOnDate(c)){ placed++; if(!firstKey || c.placeDate<firstKey) firstKey=c.placeDate; }
+  });
   if(!added && !updated){ toast('No valid recipes found in that text'); return; }
+  if(placed && firstKey) weekStart=startOfWeek(new Date(firstKey+'T00:00:00'));   // jump the week view to the plan
   commit();
-  if(activeView==='recipes') renderRecipes();
+  renderActive();
   closePasteRecipe();
-  const parts=[]; if(added) parts.push(`${added} added`); if(updated) parts.push(`${updated} updated`);
-  toast(`${parts.join(', ')} to your recipes`);
+  const parts=[];
+  if(placed) parts.push(`${placed} placed on the week`);
+  if(added) parts.push(`${added} added`);
+  if(updated) parts.push(`${updated} updated`);
+  toast(placed?`${parts.join(' · ')} — open the Meals tab to see them`:`${parts.join(', ')} to your recipes`);
 }
 
 /* ---------- empty state ---------- */
