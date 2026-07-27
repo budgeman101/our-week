@@ -161,10 +161,16 @@
   .item.done .lab .txt{color:var(--faint); text-decoration:line-through; text-decoration-color:var(--line); font-weight:400}
   .item.done .who{opacity:.5}
   .emptyhint{color:var(--faint); font-size:.9rem; padding:8px 2px}
+  .reord{flex:0 0 auto; display:flex; flex-direction:column; gap:0; margin-top:-1px}
+  .reord .ro{background:transparent; border:0; cursor:pointer; color:#b7ac97; padding:1px 3px; display:inline-flex; line-height:0}
+  .reord .ro:active{color:var(--accent)}
+  .reord .ro:disabled{opacity:.22; cursor:default}
 
   .grp{display:flex; align-items:center; gap:7px; font-size:.68rem; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin:13px 0 1px}
   .grp:first-of-type{margin-top:0}
   .grp svg{width:15px; height:15px}
+  .grp.gotit{color:var(--green); margin-top:15px}
+  .grp.gotit svg{width:14px; height:14px}
   .grp.morning{color:var(--both)}
   .grp.night{color:#4338ca}
   .grp.each{color:var(--clean)}
@@ -237,6 +243,7 @@
   .sheet .edwho{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--muted)}
   .sheet .edwho{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
   .sheet .edwho .edwhobtns{display:flex; gap:6px; flex-wrap:wrap}
+  .sheet .edareasel{flex:1; min-width:0; padding:7px 9px; border:1.5px solid var(--line); border-radius:9px; background:var(--card); color:var(--ink); font-size:14px; font-weight:600}
   .sheet .edwho .who{cursor:pointer; margin-top:0; opacity:.45; border:2px solid transparent}
   .sheet .edwho .who.on{opacity:1; border-color:currentColor}
   /* people-card rolodex (day view) */
@@ -314,8 +321,6 @@
   .samtoys{margin-top:9px; font-size:.92rem; display:flex; align-items:center; gap:6px; color:var(--accent)}
   .samtoys svg{width:16px; height:16px; flex:none}
   .samtoys b{color:var(--ink)}
-  .setout{font-size:1.15rem; font-weight:800; color:var(--accent-d)}
-  .setnext{font-size:.76rem; color:var(--faint); margin-top:9px}
   .samcore{font-size:.8rem; color:var(--muted); background:var(--accent-soft); border:1px solid #e2d5fa; border-radius:10px; padding:8px 11px; margin-top:10px; line-height:1.5}
   .swapbtn{background:var(--accent); color:#fff; border:0; border-radius:999px; padding:6px 12px; font-weight:700; font-size:.74rem; cursor:pointer; display:inline-flex; align-items:center; gap:5px}
   .swapbtn svg{width:14px; height:14px}
@@ -330,6 +335,12 @@
   .samday .sb{flex:1; min-width:0}
   .samday .sb .am{font-size:.92rem; line-height:1.4}
   .samday .sb .pm{font-size:.84rem; color:var(--muted); margin-top:2px; line-height:1.4}
+  .samday .sb .sambox{display:inline-flex; align-items:center; gap:5px; margin-top:5px; font-size:.76rem; font-weight:700; color:var(--accent-d); background:var(--accent-soft); border-radius:999px; padding:3px 9px}
+  .samday .sb .sambox svg{width:12px; height:12px; flex:none}
+  .samboxpick{display:flex; flex-wrap:wrap; gap:7px; margin-top:6px}
+  .samboxpick .bxchip{border:1.5px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:6px 13px; font-size:.84rem; font-weight:700; cursor:pointer}
+  .samboxpick .bxchip.sel{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .samboxpick .bxchip:active{transform:scale(.96)}
   .samrhythm{list-style:none; margin:0; padding:0}
   .samrhythm li{display:flex; gap:12px; font-size:.9rem; padding:6px 2px; border-top:1px solid var(--line-soft)}
   .samrhythm li:first-child{border-top:none}
@@ -377,6 +388,8 @@
   <symbol id="i-list" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></g></symbol>
   <symbol id="i-prev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6"/></symbol>
   <symbol id="i-next" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m6 15 6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-edit" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
   <symbol id="i-split" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 6h-6a4 4 0 0 0-4 4v4a4 4 0 0 1-4 4H3M21 18h-6a4 4 0 0 1-4-4M16 3l3 3-3 3M16 15l3 3-3 3"/></symbol>
@@ -571,6 +584,7 @@
     <h2><svg width="19" height="19"><use href="#i-edit"/></svg> <span id="edTitle">Edit</span></h2>
     <input type="text" id="edText" autocomplete="off" />
     <div class="edwho" id="edWhoRow">For: <span class="edwhobtns" id="edWhoBtns"></span></div>
+    <div class="edwho" id="edAreaRow" style="display:none">Section: <select id="edArea" class="edareasel"></select></div>
     <div class="edicon" id="edIconRow" style="display:none">Icon: <button class="iconpick" id="edIconBtn"><svg><use href="#i-paw"/></svg></button> <span>(tap to change)</span></div>
     <div class="eddate" id="edDateRow" style="display:none">
       <label><span id="edDateLabel">Date</span> <input type="date" id="edDate" /></label>
@@ -629,6 +643,8 @@
     <p>The morning outing and afternoon activity for this day.</p>
     <label class="samfld">Morning <input type="text" id="samDayAM" autocomplete="off" /></label>
     <label class="samfld">Afternoon <input type="text" id="samDayPM" autocomplete="off" /></label>
+    <div class="samfld" style="margin-bottom:2px">Toy box out this day</div>
+    <div class="samboxpick" id="samDayBoxes"></div>
     <button class="btn" id="samDaySave">Save</button>
     <button class="btn sec" id="samDayClose">Cancel</button>
   </div>

@@ -649,7 +649,7 @@ function runSeeders(){
   if(pendingSetup() || namesDoc() || membersDoc()) seedNeutralIfNeeded();
   else { seedTodosIfNeeded(); seedTemplateIfNeeded(); seedShiftsIfNeeded(); }
   seedSamIfNeeded();
-  autoRoll(); migrateRemoveJohny(); migrateSamV2(); migrateSamV3(); syncTimezone();
+  autoRoll(); migrateRemoveJohny(); migrateSamV2(); migrateSamV3(); migrateSamV4(); syncTimezone();
 }
 /* once the cloud has answered: real family → pick who you are;
    nothing there → the code is wrong, back to the welcome card */
@@ -764,36 +764,53 @@ function scheduledStepsFor(iso){
  *  Mon–Sun plan and the toy sets are editable docs that sync; the
  *  daily rhythm and ideas menu are fixed reference. Seeded only for
  *  the original household; a new family gets an empty Sam tab to fill. */
-let samEditId=null, samEditFresh=false, samDayIdx=null;
+let samEditId=null, samEditFresh=false, samDayIdx=null, samDayBoxSel=null, samDayBoxOpen=null;
 function toySets(){ return Object.values(items).filter(t=>t.kind==="toyset"&&!t._gone).sort(byOrder); }
-function toyRotDoc(){ const d=items["meta:toyrot"]; return (d && !d._gone) ? d : null; }
-function weeksBetweenKeys(a, b){
-  const da=new Date(a+"T00:00:00"), db=new Date(b+"T00:00:00");
-  return Math.round((db-da)/(7*24*60*60*1000));
+/* Boxes are spread across the week's days by a shuffle seeded on the week
+   key (plus a manual offset). So the mix is different every week, isn't
+   pinned to any one weekday, and comes out identical on every family device
+   without ever syncing the random result. A "Shuffle" nudges the seed; a
+   per-day pick overrides just that one day for the current week. */
+function samBoxDoc(){ const d=items["meta:samboxes"]; return (d && !d._gone) ? d : null; }
+function samHash(s){ let h=2166136261>>>0; s=String(s); for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+function samRng(seed){ let a=seed>>>0; return function(){ a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+/* returns 7 toy-set ids, one per day (Mon..Sun), for the given week */
+function samBoxAssignment(weekKey){
+  const sets=toySets(); if(!sets.length) return [];
+  const ids=sets.map(s=>s.id), n=ids.length;
+  const doc=samBoxDoc(), offset=(doc&&doc.offset)||0;
+  /* fill 7 slots by cycling the boxes (balanced), starting at a week-varying
+     point so the box that gets used less isn't always the same one */
+  const rotStart=samHash(weekKey)%n, arr=[];
+  for(let i=0;i<7;i++) arr.push(ids[(i+rotStart)%n]);
+  const rnd=samRng((samHash(weekKey)^Math.imul(offset+1,2654435761))>>>0);
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); const t=arr[i]; arr[i]=arr[j]; arr[j]=t; }
+  if(doc && doc.ow===weekKey && doc.ovr) Object.keys(doc.ovr).forEach(k=>{
+    const di=Number(k), id=doc.ovr[k];
+    if(di>=0 && di<7 && items[id] && items[id].kind==="toyset" && !items[id]._gone) arr[di]=id;
+  });
+  return arr;
 }
-/* which set is out for a given week: step through the sets by how many
-   weeks have passed since the start week, plus any manual swap offset */
-function toyIndexForWeek(weekKey){
-  const sets=toySets(); if(!sets.length) return -1;
-  const rot=toyRotDoc();
-  const start=(rot && rot.startWeekKey) || weekKey;
-  const off=(rot && rot.offset) || 0;
-  const n=weeksBetweenKeys(start, weekKey)+off;
-  return ((n % sets.length)+sets.length) % sets.length;
-}
-function toySetForWeek(weekKey){ const i=toyIndexForWeek(weekKey); return i<0?null:toySets()[i]; }
+function samBoxForDay(weekKey, day){ const a=samBoxAssignment(weekKey); const id=a[Number(day)]; return id?items[id]:null; }
 function samPlan(day){ const d=items["samplan:"+day]; return (d && !d._gone) ? d : null; }
 function samClean(s, n){ return String(s||"").replace(/[<>]/g,"").trim().slice(0, n||24); }
 function isSamSeeded(t){ return !!t && (/^toyset:\d+$/.test(t.id) || /^samplan:/.test(t.id)); }
 
-function swapToySet(dir){
+function shuffleSamBoxes(){
   if(!toySets().length) return;
-  const rot=Object.assign({ id:"meta:toyrot", kind:"toyrot", startWeekKey:realWeekKey(), offset:0 }, toyRotDoc()||{});
-  rot.offset=(rot.offset||0)+(dir||1);
-  put(rot);
-  const s=toySetForWeek(curWeekKey());
+  const doc=Object.assign({ id:"meta:samboxes", kind:"samboxes", offset:0 }, samBoxDoc()||{});
+  doc.offset=(doc.offset||0)+1; doc.ow=curWeekKey(); doc.ovr={};   // reshuffle clears this week's pins
+  put(doc);
   render();
-  if(s) showToast("Toys out this week: "+s.name);
+  showToast("Shuffled this week's toy boxes");
+}
+/* pin one box to one day of the current week (clears when the week turns or a
+   fresh shuffle happens) */
+function setSamBoxForDay(day, toysetId){
+  const doc=Object.assign({ id:"meta:samboxes", kind:"samboxes", offset:0, ovr:{} }, samBoxDoc()||{});
+  if(doc.ow!==curWeekKey()){ doc.ow=curWeekKey(); doc.ovr={}; }
+  doc.ovr=Object.assign({}, doc.ovr); doc.ovr[String(day)]=toysetId;
+  put(doc);
 }
 function addToySet(){
   const sets=toySets();
@@ -820,7 +837,6 @@ function seedSamIfNeeded(force){
   if(!force && items[sentinel]) return;
   if(tunedHousehold()){
     SAM_SETS.forEach((s,i)=> seedDoc("toyset:"+i, { kind:"toyset", name:s.name, items:s.items.slice(), order:i }, force));
-    seedDoc("meta:toyrot", { kind:"toyrot", startWeekKey:realWeekKey(), offset:0 }, force);
     SAM_GRID.forEach((g,i)=> seedDoc("samplan:"+i, { kind:"samplan", day:i, am:g.am, pm:g.pm }, force));
   }
   setMeta(sentinel); saveLocal();
@@ -859,6 +875,14 @@ function migrateSamV3(){
   }
   setMeta("meta:mig:samv3"); saveLocal();
 }
+/* v4 (2026-07-26): the weekly one-box rotation is gone — boxes now shuffle
+   across the week's days instead. Retire the old rotation pointer; the boxes
+   and the daily plan are left untouched. Idempotent. */
+function migrateSamV4(){
+  if(items["meta:mig:samv4"]) return;
+  if(items["meta:toyrot"] && !items["meta:toyrot"]._gone) drop("meta:toyrot");
+  setMeta("meta:mig:samv4"); saveLocal();
+}
 /* the two Sam sheets live at module scope so addToySet can open one */
 function openSamSet(id, fresh){
   if(!HAS_DOM){ samEditId=id; samEditFresh=!!fresh; return; }
@@ -874,11 +898,24 @@ function openSamDay(day){
   if(!HAS_DOM) return;
   samDayIdx=Number(day);
   const p=samPlan(day)||{};
+  const box=samBoxForDay(curWeekKey(), day);
+  samDayBoxOpen = samDayBoxSel = box ? box.id : null;
   document.getElementById("samDayTitle").textContent=DAY_FULL[day]+" — "+SAM_NAME;
   document.getElementById("samDayAM").value=p.am||"";
   document.getElementById("samDayPM").value=p.pm||"";
+  renderSamDayBoxes();
   document.getElementById("samDaySheet").classList.add("show");
   setTimeout(()=>document.getElementById("samDayAM").focus(),60);
+}
+/* the box chips inside the day sheet — tap one to pin it to this day */
+function renderSamDayBoxes(){
+  const wrap=document.getElementById("samDayBoxes");
+  if(!wrap) return;
+  const sets=toySets();
+  if(!sets.length){ wrap.innerHTML=""; return; }
+  wrap.innerHTML = sets.map(s=>`<button type="button" class="bxchip ${s.id===samDayBoxSel?'sel':''}" data-box="${s.id}">${esc(s.name||"Untitled box")}</button>`).join("");
+  wrap.onclick=e=>{ const b=e.target.closest(".bxchip"); if(!b) return;
+    samDayBoxSel=b.dataset.box; renderSamDayBoxes(); };
 }
 
 /* ============================== mutators ========================== */
@@ -895,6 +932,19 @@ function toggleTodo(id){
   } else { t.done=!t.done; t.doneBy=t.done?(me||null):null; put(t); }
 }
 function toggleStep(id){ const t=items[id]; if(!t) return; t.done=!t.done; t.doneBy=t.done?(me||null):null; put(t); }
+/* hand-reorder a master-list to-do within its own section (same person +
+   area). Renumbers that group's order so the move sticks and syncs. */
+function moveMasterTodo(id, dir){
+  const t=items[id]; if(!t) return;
+  const key=normWho(t.who||"both")+"|"+(t.area||"other");
+  const sibs=masterTodos().filter(x=>!todoDone(x) && (normWho(x.who||"both")+"|"+(x.area||"other"))===key)
+    .sort((a,b)=>(a.order||0)-(b.order||0));
+  const i=sibs.findIndex(x=>x.id===id); if(i<0) return;
+  const j=i+dir; if(j<0||j>=sibs.length) return;
+  sibs.splice(j,0,sibs.splice(i,1)[0]);
+  sibs.forEach((x,k)=>{ if(x.order!==k){ x.order=k; put(x); } });
+  render();
+}
 function addTodo(text){
   text=(text||"").trim(); if(!text) return;
   const id="c:"+Date.now()+Math.random().toString(36).slice(2,6);
@@ -1368,6 +1418,11 @@ function updateEdWho(){
   row.innerHTML = opts.map(o=>'<button class="who '+o[0]+(edWho===o[0]?' on':'')+'" data-who="'+o[0]+'">'+esc(o[1])+'</button>').join("");
 }
 function updateEdIcon(){ document.getElementById("edIconBtn").innerHTML='<svg><use href="#'+edIcon+'"/></svg>'; }
+function fillAreaSelect(sel){
+  const el=document.getElementById("edArea"); if(!el) return;
+  el.innerHTML=AREA_ORDER.map(a=>`<option value="${a}">${esc(AREAS[a])}</option>`).join("");
+  el.value = AREAS[sel] ? sel : "other";
+}
 function show(id, on){ document.getElementById(id).style.display = on?"":"none"; }
 function openEditor(id, fresh){
   if(!HAS_DOM){ editingId=id; editingFresh=!!fresh; return; }   // no editor without a DOM (node tests)
@@ -1398,6 +1453,7 @@ function openEditor(id, fresh){
   document.getElementById("edSplitToggle").innerHTML='<svg width="15" height="15"><use href="#i-split"/></svg> Split into two';
   const isTodo = t.kind==="todo";
   show("edWhoRow", hasWho);
+  show("edAreaRow", isTodo);
   show("edIconRow", isCare);
   show("edDateRow", isStep || isAppt || isTodo || isShift);
   show("edTimeRow", isAppt || isShift);
@@ -1415,6 +1471,7 @@ function openEditor(id, fresh){
     document.getElementById("edDate").value = t.schedISO || "";
   }
   if(isTodo){
+    fillAreaSelect(t.area || classify(t.text).area);
     document.getElementById("edRepeat").checked = !!t.repeat;
     document.getElementById("edDateHint").textContent = t.repeat
       ? "Repeats every week on this weekday. Untick to make it a one-off."
@@ -1524,7 +1581,8 @@ function saveEditor(){
       t.weekKey=null;                        // recurring ignores the week
     } else if(v){ const d=new Date(v+"T00:00:00"); t.weekKey=weekKeyOf(d); t.day=(d.getDay()+6)%7; }
     else { t.weekKey=null; t.day=null; }     // back to the master List
-    if(!t.area) t.area=classify(t.text).area;
+    const areaSel=document.getElementById("edArea");
+    t.area = (areaSel && AREAS[areaSel.value]) ? areaSel.value : (t.area || classify(t.text).area);
     delete t.autoPlanned;                     // a manual save is no longer auto-scheduled
   }
   if(t.kind==="appt"){
@@ -1571,14 +1629,20 @@ function tplRow(it){
     <button class="editb" data-act="editbtn" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
 }
-function todoRow(t){
+function todoRow(t, opts){
+  opts=opts||{};
   const done=todoDone(t);
   const who=normWho(t.who);
   const rep = t.repeat ? ` <span class="apptrep">weekly</span>` : "";
   const sub = done && t.doneBy && !t.repeat ? `<span class="sub">done by ${whoLabel(t.doneBy)}</span>` : "";
+  const reord = opts.reorder ? `<div class="reord">
+      <button class="ro" data-act="todoup" aria-label="Move up"${opts.first?" disabled":""}><svg width="14" height="14"><use href="#i-up"/></svg></button>
+      <button class="ro" data-act="tododown" aria-label="Move down"${opts.last?" disabled":""}><svg width="14" height="14"><use href="#i-down"/></svg></button>
+    </div>` : "";
   return `<li><div class="item ${who} ${done?'done':''}" data-id="${t.id}">
     <div class="box" data-act="todocheck"><svg><use href="#i-check"/></svg></div>
     <div class="lab"><span class="txt" data-act="edititem">${esc(t.text)}${rep}</span>${sub}</div>
+    ${reord}
     <button class="who ${who}" data-act="editbtn">${whoLabel(who)}</button>
     <button class="editb" data-act="editbtn" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
   </div></li>`;
@@ -1800,13 +1864,19 @@ function renderList(){
     const w=g[0], label=g[1], col=g[2];
     const mine=all.filter(t=>normWho(t.who||"both")===w);
     if(!mine.length) return "";
-    const open=mine.filter(t=>!t.done).length;
+    const active=mine.filter(t=>!todoDone(t));
+    const done=mine.filter(t=>todoDone(t));
+    const open=active.length;
     const byArea=AREA_ORDER.map(a=>{
-      const rows=mine.filter(t=>(t.area||"other")===a);
+      const rows=active.filter(t=>(t.area||"other")===a).sort((x,y)=>(x.order||0)-(y.order||0));
       if(!rows.length) return "";
-      return `<div class="grp">${esc(AREAS[a])}</div><ul class="items">${rows.map(todoRow).join("")}</ul>`;
+      const list=rows.map((t,i)=>todoRow(t,{reorder:rows.length>1, first:i===0, last:i===rows.length-1})).join("");
+      return `<div class="grp">${esc(AREAS[a])}</div><ul class="items">${list}</ul>`;
     }).join("");
-    return `<div class="card"><div class="ctitle"${col?` style="color:${col}"`:""}><svg><use href="#i-list"/></svg>${esc(label)} · ${open} to do</div>${byArea}</div>`;
+    const gotit = done.length
+      ? `<div class="grp gotit"><svg><use href="#i-check"/></svg>Got it · ${done.length}</div><ul class="items">${done.map(t=>todoRow(t)).join("")}</ul>`
+      : "";
+    return `<div class="card"><div class="ctitle"${col?` style="color:${col}"`:""}><svg><use href="#i-list"/></svg>${esc(label)} · ${open} to do</div>${byArea}${gotit}</div>`;
   }).join("");
   const empty=`<div class="emptybig"><svg width="34" height="34"><use href="#i-list"/></svg><p>The master list is empty.<br>Type above, say it to Siri, or import a dump — it sorts itself.</p></div>`;
   document.getElementById("listBody").innerHTML = `
@@ -1928,47 +1998,41 @@ function renderNotes(){
 
 /* ------------------------------ Sam view -------------------------- */
 function samSetCardHTML(){
-  const wk=curWeekKey();
   const sets=toySets();
   if(!sets.length){
-    return `<div class="card"><div class="ctitle"><svg><use href="#i-rotate"/></svg>Toys this week</div>
-      <p class="emptyhint">No toy sets yet — add a few and one will be "out" each week.</p>
-      <button class="bigadd" data-act="samadd"><svg width="18" height="18"><use href="#i-plus"/></svg> Add a toy set</button></div>`;
+    return `<div class="card"><div class="ctitle"><svg><use href="#i-rotate"/></svg>Toy boxes</div>
+      <p class="emptyhint">No toy boxes yet — add a few and one comes out each day.</p>
+      <button class="bigadd" data-act="samadd"><svg width="18" height="18"><use href="#i-plus"/></svg> Add a toy box</button></div>`;
   }
-  const idx=toyIndexForWeek(wk);
-  const cur=sets[idx];
-  const next=sets[(idx+1)%sets.length];
-  const chips = cur.items.length ? cur.items.map(it=>`<span class="carechip">${esc(it)}</span>`).join("")
-                                 : '<span class="emptyhint">No toys listed yet — tap Edit this set.</span>';
-  const allSets = sets.map((s,i)=>`<li><div class="item ${i===idx?'both':''}" data-id="${s.id}">
-      <div class="lab"><span class="txt" data-act="samedit" data-id="${s.id}">${esc(s.name||"Untitled set")}${i===idx?' <span class="apptrep">out now</span>':''}</span>
+  const allSets = sets.map(s=>`<li><div class="item" data-id="${s.id}">
+      <div class="lab"><span class="txt" data-act="samedit" data-id="${s.id}">${esc(s.name||"Untitled box")}</span>
         <span class="sub">${esc(s.items.join(" · "))||"—"}</span></div>
       <button class="editb" data-act="samedit" data-id="${s.id}" aria-label="Edit"><svg width="17" height="17"><use href="#i-edit"/></svg></button>
     </div></li>`).join("");
   return `<div class="card">
-    <div class="ctitle"><svg><use href="#i-rotate"/></svg>Toys this week
-      <button class="swapbtn" data-act="samswap"><svg><use href="#i-rotate"/></svg>Swap</button></div>
-    <div class="setout">${esc(cur.name||"Untitled set")}</div>
-    <div class="carechips" style="margin-top:8px">${chips}</div>
-    <div class="setnext">Next week → ${esc(next.name||"Untitled set")}</div>
+    <div class="ctitle"><svg><use href="#i-rotate"/></svg>Toy boxes
+      <button class="swapbtn" data-act="samshuffle"><svg><use href="#i-rotate"/></svg>Shuffle</button></div>
+    <div class="samcore">A different box comes out each day — see <b>This week's plan</b> below. Shuffle mixes up the week; tap any day to pin its box.</div>
     <div class="samcore">${esc(SAM_CORE)}</div>
     <div class="samcore">${esc(SAM_CRAFT)}</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px">
-      <button class="addmini left" data-act="samedit" data-id="${cur.id}"><svg><use href="#i-edit"/></svg>Edit this set</button>
-      <button class="addmini left" data-act="samadd"><svg><use href="#i-plus"/></svg>Add a set</button>
+      <button class="addmini left" data-act="samadd"><svg><use href="#i-plus"/></svg>Add a box</button>
     </div>
-    <div class="grp" style="margin-top:14px">All sets</div>
+    <div class="grp" style="margin-top:14px">All boxes</div>
     <ul class="items">${allSets}</ul>
   </div>`;
 }
 function samWeekCardHTML(){
+  const wk=curWeekKey();
   const rows=DAY_FULL.map((dn,i)=>{
     const p=samPlan(i);
+    const box=samBoxForDay(wk, i);
     const today = isThisWeek() && i===todayMonIndex();
     return `<div class="samday ${today?'today':''}" data-act="samday" data-day="${i}">
       <div class="sd">${DAY_SHORT[i]}</div>
       <div class="sb"><div class="am">${p&&p.am?esc(p.am):'<span class="ph">tap to add</span>'}</div>
-        ${p&&p.pm?`<div class="pm">${esc(p.pm)}</div>`:''}</div></div>`;
+        ${p&&p.pm?`<div class="pm">${esc(p.pm)}</div>`:''}
+        ${box?`<div class="sambox"><svg><use href="#i-rotate"/></svg>${esc(box.name||"Untitled box")}</div>`:''}</div></div>`;
   }).join("");
   return `<div class="card"><div class="ctitle"><svg><use href="#i-checklist"/></svg>This week's plan</div><div class="samweek">${rows}</div></div>`;
 }
@@ -1989,12 +2053,12 @@ function renderSam(){
 /* the compact Sam card on the Week view — today's plan + this week's set */
 function samMiniHTML(){
   const p=samPlan(selDay);
-  const cur=toySetForWeek(curWeekKey());
-  if(!p && !cur) return "";
+  const box=samBoxForDay(curWeekKey(), selDay);
+  if(!p && !box) return "";
   return `<div class="card samcard" data-act="gosam">
     <div class="ctitle"><svg><use href="#i-child"/></svg>${esc(SAM_NAME)}<span class="apptrep" style="margin-left:auto; text-transform:none; letter-spacing:0">tap for more →</span></div>
     ${p?`<div class="samline"><b>Morning</b>${p.am?esc(p.am):"—"}</div><div class="samline"><b>Afternoon</b>${p.pm?esc(p.pm):"—"}</div>`:""}
-    ${cur?`<div class="samtoys"><svg><use href="#i-rotate"/></svg>Toys out: <b>${esc(cur.name)}</b></div>`:""}
+    ${box?`<div class="samtoys"><svg><use href="#i-rotate"/></svg>Box out today: <b>${esc(box.name)}</b></div>`:""}
   </div>`;
 }
 
@@ -2155,6 +2219,8 @@ if(HAS_DOM){
     }
     const row=el.closest("[data-id]"); if(!row) return;
     const id=row.dataset.id, act=el.dataset.act;
+    if(act==="todoup"){ moveMasterTodo(id,-1); return; }
+    if(act==="tododown"){ moveMasterTodo(id,1); return; }
     if(act==="todocheck"){ toggleTodo(id); render(); }
     else if(act==="edititem" || act==="editbtn"){ openEditor(id); }
   });
@@ -2364,7 +2430,7 @@ if(HAS_DOM){
   document.getElementById("viewSam").addEventListener("click", e=>{
     const el=e.target.closest("[data-act]"); if(!el) return;
     const act=el.dataset.act;
-    if(act==="samswap"){ swapToySet(1); return; }
+    if(act==="samshuffle"){ shuffleSamBoxes(); return; }
     if(act==="samadd"){ addToySet(); return; }
     if(act==="samedit"){ openSamSet(el.dataset.id); return; }
     if(act==="samday"){ openSamDay(el.dataset.day); return; }
@@ -2389,10 +2455,11 @@ if(HAS_DOM){
   document.getElementById("samDaySave").onclick=()=>{
     if(samDayIdx==null) return;
     saveSamDay(samDayIdx, document.getElementById("samDayAM").value, document.getElementById("samDayPM").value);
-    samDayIdx=null;
+    if(samDayBoxSel && samDayBoxSel!==samDayBoxOpen) setSamBoxForDay(samDayIdx, samDayBoxSel);
+    samDayIdx=samDayBoxSel=samDayBoxOpen=null;
     document.getElementById("samDaySheet").classList.remove("show"); render();
   };
-  document.getElementById("samDayClose").onclick=()=>{ samDayIdx=null; document.getElementById("samDaySheet").classList.remove("show"); };
+  document.getElementById("samDayClose").onclick=()=>{ samDayIdx=samDayBoxSel=samDayBoxOpen=null; document.getElementById("samDaySheet").classList.remove("show"); };
   document.getElementById("samDayAM").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("samDayPM").focus(); });
   document.getElementById("samDayPM").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("samDaySave").click(); });
 
@@ -2780,17 +2847,21 @@ if(!HAS_DOM){
     console.log("un-skip restores it:", shiftsForDate(monISO).some(s=>s.id==="shift:reg:mon"));
   })();
 
-  /* Sam: toy sets + weekly plan seed; the set rotates by week + swaps */
+  /* Sam: toy boxes + weekly plan seed; a box comes out each day, shuffled */
   seedSamIfNeeded();
-  console.log("Sam seeds 4 toy sets + 7 plan days:", toySets().length===4 && Object.values(items).filter(t=>t.kind==="samplan").length===7);
+  console.log("Sam seeds 4 toy boxes + 7 plan days:", toySets().length===4 && Object.values(items).filter(t=>t.kind==="samplan").length===7);
   (function(){
-    const start=items["meta:toyrot"].startWeekKey;
-    const wkAt=n=>{ const d=new Date(start+"T00:00:00"); d.setDate(d.getDate()+7*n); return weekKeyOf(d); };
-    console.log("Sam toy set advances weekly:", toyIndexForWeek(wkAt(0))===0 && toyIndexForWeek(wkAt(1))===1 && toyIndexForWeek(wkAt(2))===2);
-    console.log("Sam rotation wraps after 4 weeks:", toyIndexForWeek(wkAt(4))===toyIndexForWeek(wkAt(0)));
-    const before=toyIndexForWeek(wkAt(4));
-    swapToySet(1);
-    console.log("Sam swap advances the set:", toyIndexForWeek(wkAt(4))===((before+1)%4));
+    const w0=realWeekKey();
+    const dN=new Date(w0+"T00:00:00"); dN.setDate(dN.getDate()+7); const w1=weekKeyOf(dN);
+    const a0=samBoxAssignment(w0);
+    console.log("Sam gives every day a box:", a0.length===7 && a0.every(id=>items[id]&&items[id].kind==="toyset"));
+    console.log("Sam mix is stable per week (same on every device):", JSON.stringify(samBoxAssignment(w0))===JSON.stringify(a0));
+    console.log("Sam mix differs across weeks:", JSON.stringify(samBoxAssignment(w0))!==JSON.stringify(samBoxAssignment(w1)));
+    const beforeShuf=JSON.stringify(samBoxAssignment(curWeekKey()));
+    shuffleSamBoxes();
+    console.log("Sam shuffle changes the mix:", beforeShuf!==JSON.stringify(samBoxAssignment(curWeekKey())));
+    const pin=toySets()[0].id; setSamBoxForDay(3, pin);
+    console.log("Sam per-day pin sticks:", samBoxForDay(curWeekKey(),3).id===pin);
     saveSamDay(2, "Test AM", "Test PM");
     console.log("Sam day plan saves:", samPlan(2).am==="Test AM" && samPlan(2).pm==="Test PM");
     // v2 migration: retire an old Make & Create set + reword the toy-named afternoons
